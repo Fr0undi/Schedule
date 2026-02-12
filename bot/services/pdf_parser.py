@@ -253,6 +253,55 @@ def parse_pdf(file_path: str, group_name: str) -> list[dict]:
     return lessons
 
 
+def parse_pdf_all_groups(file_path: str) -> dict[str, list[dict]]:
+    """Распарсить PDF и вернуть расписание для ВСЕХ найденных групп
+
+    Возвращает dict: {group_name: [lessons]}
+    """
+
+    path = Path(file_path)
+    if not path.exists():
+        logger.error("Файл не найден: %s", file_path)
+        return {}
+
+    logger.info("Парсинг PDF (все группы): %s", file_path)
+
+    try:
+        pdf = pdfplumber.open(str(path))
+    except Exception:
+        logger.exception("Не удалось открыть PDF: %s", file_path)
+        return {}
+
+    # Находим все группы в заголовках
+    group_names: list[str] = []
+    try:
+        for page in pdf.pages:
+            tables = page.extract_tables()
+            for table in tables:
+                if not table or len(table) < 2:
+                    continue
+                header = table[0]
+                for cell in header:
+                    if cell and cell.strip() and cell.strip() not in group_names:
+                        clean = cell.strip()
+                        if re.match(r"^[А-ЯЁа-яё]+-[А-ЯЁа-яё]+\s+\d+", clean):
+                            group_names.append(clean)
+    except Exception:
+        logger.exception("Ошибка при поиске групп в PDF")
+    finally:
+        pdf.close()
+
+    logger.info("Найдено групп в PDF: %d — %s", len(group_names), ", ".join(group_names))
+
+    result: dict[str, list[dict]] = {}
+    for name in group_names:
+        lessons = parse_pdf(file_path, name)
+        if lessons:
+            result[name] = lessons
+
+    return result
+
+
 def _make_lesson(
     weekday: int,
     week_type: str,

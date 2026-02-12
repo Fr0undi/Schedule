@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Выбор группы</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="header">
+        <h1>Расписание</h1>
+        <div class="subtitle">Выберите группу</div>
+    </div>
+
+    <div class="group-list">
+        {% if groups %}
+            {% for group in groups %}
+            <a href="/?group={{ group }}" class="group-card">
+                {{ group }}
+            </a>
+            {% endfor %}
+        {% else %}
+            <div class="day-empty">Нет доступных групп</div>
+        {% endif %}
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

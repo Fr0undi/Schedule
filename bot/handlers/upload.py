@@ -10,7 +10,7 @@ from bot.config import settings
 
 from bot.logger import get_logger
 
-from bot.services.pdf_parser import parse_pdf
+from bot.services.pdf_parser import parse_pdf_all_groups
 from bot.services.storage import save_schedule
 
 
@@ -22,12 +22,12 @@ router = Router()
 @router.message(F.document, F.chat.type == "private")
 async def handle_pdf_upload(message: Message) -> None:
     if message.from_user.id not in settings.ADMIN_IDS:
-        await message.answer("⛔ У вас нет прав для загрузки расписания.")
+        await message.answer("⛔ У вас нет прав для загрузки расписания")
         return
 
     doc = message.document
     if not doc.file_name or not doc.file_name.lower().endswith(".pdf"):
-        await message.answer("📄 Отправьте файл в формате PDF.")
+        await message.answer("📄 Отправьте файл в формате PDF")
         return
 
     status_msg = await message.answer("⏳ Обрабатываю PDF...")
@@ -43,27 +43,33 @@ async def handle_pdf_upload(message: Message) -> None:
 
         logger.info("PDF скачан: %s", file_path)
 
-        lessons = parse_pdf(str(file_path), settings.GROUP_NAME)
+        all_groups = parse_pdf_all_groups(str(file_path))
 
-        if not lessons:
+        if not all_groups:
             await status_msg.edit_text(
-                "❌ Не удалось разобрать PDF. "
-                f"Группа «{settings.GROUP_NAME}» не найдена или таблица пуста.\n"
-                "Подробности в логах."
+                "❌ Не удалось разобрать PDF\n"
+                "Группы не найдены или таблица пуста\n"
+                "Подробности в логах"
             )
             return
 
-        save_schedule(lessons)
+        for group_name, lessons in all_groups.items():
+            save_schedule(group_name, lessons)
+
+        group_list = "\n".join(
+            f"  • {name}: {len(lessons)} пар"
+            for name, lessons in all_groups.items()
+        )
 
         await status_msg.edit_text(
             f"✅ Расписание обновлено!\n"
-            f"Группа: {settings.GROUP_NAME}\n"
-            f"Загружено пар: {len(lessons)}"
+            f"Найдено групп: {len(all_groups)}\n\n"
+            f"{group_list}"
         )
-        logger.info("Расписание обновлено: %d пар", len(lessons))
+        logger.info("Расписание обновлено для %d групп", len(all_groups))
 
     except Exception:
         logger.exception("Ошибка при обработке PDF")
         await status_msg.edit_text(
-            "❌ Произошла ошибка при обработке PDF. Подробности в логах."
+            "❌ Произошла ошибка при обработке PDF. Подробности в логах"
         )

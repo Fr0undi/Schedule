@@ -9,7 +9,7 @@ from fastapi.templating import Jinja2Templates
 
 from bot.config import settings
 
-from bot.services.storage import get_full_schedule
+from bot.services.storage import get_full_schedule, list_available_groups
 from bot.services.week_utils import get_week_type, get_week_type_display, get_week_number
 from bot.services.formatter import _lesson_word
 
@@ -31,24 +31,31 @@ TYPE_EMOJI = {
 async def schedule_page(
     request: Request,
     week: str = Query(default = None),
+    group: str = Query(default = None),
 ):
+    if not group:
+        groups = list_available_groups()
+        return templates.TemplateResponse("select_group.html", {
+            "request": request,
+            "groups": groups,
+        })
+
     today = date.today()
     current_week_type = get_week_type(today, settings.SEMESTER_START)
     week_type = week if week in ("odd", "even") else current_week_type
     week_num = get_week_number(today, settings.SEMESTER_START)
 
-    odd_schedule = get_full_schedule("odd")
-    even_schedule = get_full_schedule("even")
+    odd_schedule = get_full_schedule(group, "odd")
+    even_schedule = get_full_schedule(group, "even")
 
-    # Определяем какой день раскрыть
     weekday = today.weekday()
     active_schedule = odd_schedule if week_type == "odd" else even_schedule
     if weekday == 6 or (weekday == 5 and 5 not in active_schedule):
-        weekday = 0  # Воскресенье или суббота без пар → понедельник
+        weekday = 0
 
     return templates.TemplateResponse("schedule.html", {
         "request": request,
-        "group_name": settings.GROUP_NAME,
+        "group_name": group,
         "week_type": week_type,
         "week_num": week_num,
         "odd_display": "Нечётная (числитель)",
