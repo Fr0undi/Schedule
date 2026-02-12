@@ -3,6 +3,7 @@
 from datetime import date, timedelta
 
 from aiogram import Bot
+from aiogram.exceptions import TelegramBadRequest
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -15,7 +16,7 @@ from bot.services.storage import get_day_schedule
 from bot.services.week_utils import get_week_type
 from bot.services.formatter import format_day_schedule
 
-from bot.keyboards.inline import webapp_keyboard
+from bot.keyboards.inline import webapp_keyboard, url_keyboard
 
 
 logger = get_logger(__name__)
@@ -27,36 +28,49 @@ async def send_daily_schedule(bot: Bot) -> None:
     try:
         tomorrow = date.today() + timedelta(days=1)
         weekday = tomorrow.weekday()
+        logger.info("Планировщик: завтра %s, weekday=%d, chat_id=%s", tomorrow, weekday, settings.GROUP_CHAT_ID)
 
         if weekday == 6:
-            await bot.send_message(
+            msg = await bot.send_message(
                 settings.GROUP_CHAT_ID,
                 "🎉 Завтра воскресенье! Отдыхайте",
             )
+            logger.info("Отправлено (воскресенье), message_id=%d", msg.message_id)
             return
 
         week_type = get_week_type(tomorrow, settings.SEMESTER_START)
         lessons = get_day_schedule(weekday, week_type)
+        logger.info("Найдено пар: %d, week_type=%s", len(lessons), week_type)
 
         if weekday == 5 and not lessons:
-            await bot.send_message(
+            msg = await bot.send_message(
                 settings.GROUP_CHAT_ID,
                 "🎉 Завтра суббота без пар! Отдыхайте",
             )
+            logger.info("Отправлено (суббота без пар), message_id=%d", msg.message_id)
             return
 
         text = format_day_schedule(lessons, tomorrow, settings.SEMESTER_START)
+        logger.info("Текст сообщения:\n%s", text)
 
-        markup = None
         if settings.WEBAPP_BASE_URL.startswith("https://"):
-            markup = webapp_keyboard(settings.WEBAPP_BASE_URL, week_type)
+            try:
+                msg = await bot.send_message(
+                    settings.GROUP_CHAT_ID,
+                    text,
+                    reply_markup = webapp_keyboard(settings.WEBAPP_BASE_URL, week_type),
+                )
+            except TelegramBadRequest:
+                logger.warning("WebApp-кнопка не прошла, отправляю URL-кнопку")
+                msg = await bot.send_message(
+                    settings.GROUP_CHAT_ID,
+                    text,
+                    reply_markup = url_keyboard(settings.WEBAPP_BASE_URL, week_type),
+                )
+        else:
+            msg = await bot.send_message(settings.GROUP_CHAT_ID, text)
 
-        await bot.send_message(
-            settings.GROUP_CHAT_ID,
-            text,
-            reply_markup=markup,
-        )
-        logger.info("Расписание на завтра отправлено в чат")
+        logger.info("Расписание отправлено, message_id=%d", msg.message_id)
 
     except Exception:
         logger.exception("Ошибка при отправке расписания")
