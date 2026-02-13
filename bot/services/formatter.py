@@ -117,8 +117,8 @@ def format_week_overview(
         "",
     ]
 
-    for day in range(6):
-        day_name = DAY_NAMES[day]
+    for day in range(1, 7):
+        day_name = DAY_NAMES[day - 1]
         lessons = full_schedule.get(day, [])
         count = len(lessons)
 

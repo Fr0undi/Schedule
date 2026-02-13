@@ -52,7 +52,7 @@ async def send_daily_schedule(bot: Bot) -> None:
         return
 
     tomorrow = date.today() + timedelta(days = 1)
-    weekday = tomorrow.weekday()
+    weekday = tomorrow.weekday() + 1
     logger.info("Рассылка: завтра %s, weekday=%d, групп=%d", tomorrow, weekday, len(groups))
 
     for chat_id, group_config in groups.items():
@@ -60,14 +60,14 @@ async def send_daily_schedule(bot: Bot) -> None:
         semester_start = group_config["semester_start"]
 
         try:
-            if weekday == 6:
+            if weekday == 7:
                 await bot.send_message(chat_id, "🎉 Завтра воскресенье! Отдыхайте")
                 continue
 
             week_type = get_week_type(tomorrow, semester_start)
             lessons = get_day_schedule(group_name, weekday, week_type)
 
-            if weekday == 5 and not lessons:
+            if weekday == 6 and not lessons:
                 await bot.send_message(chat_id, "🎉 Завтра суббота без пар! Отдыхайте")
                 continue
 

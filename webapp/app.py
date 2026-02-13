@@ -48,10 +48,10 @@ async def schedule_page(
     odd_schedule = get_full_schedule(group, "odd")
     even_schedule = get_full_schedule(group, "even")
 
-    weekday = today.weekday()
+    weekday = today.weekday() + 1
     active_schedule = odd_schedule if week_type == "odd" else even_schedule
-    if weekday == 6 or (weekday == 5 and 5 not in active_schedule):
-        weekday = 0
+    if weekday == 7 or (weekday == 6 and 6 not in active_schedule):
+        weekday = 1
 
     return templates.TemplateResponse("schedule.html", {
         "request": request,

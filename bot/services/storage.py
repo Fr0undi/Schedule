@@ -35,6 +35,7 @@ def _schedule_path(group_name: str) -> Path:
 def save_schedule(group_name: str, lessons: list[dict]) -> None:
     """Сохранить расписание для конкретной группы"""
 
+    lessons.sort(key = lambda l: (l["weekday"], l["lesson_number"]))
     data = {
         "updated_at": datetime.now().isoformat(),
         "lessons": lessons,
@@ -78,7 +79,7 @@ def get_full_schedule(group_name: str, week_type: str) -> dict[int, list[dict]]:
 
     lessons = load_schedule(group_name)
     result: dict[int, list[dict]] = {}
-    for day in range(6):
+    for day in range(1, 7):
         day_lessons = sorted(
             [
                 l for l in lessons

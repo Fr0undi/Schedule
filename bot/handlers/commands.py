@@ -64,7 +64,7 @@ async def cmd_start(message: Message) -> None:
     await message.answer(
         f"👋 Привет! Я бот расписания\n\n"
         f"{status}\n\n"
-        "Команды: /today /tomorrow /week /help"
+        "Команды: /today /tomorrow /week /edit /help"
     )
 
 
@@ -77,7 +77,7 @@ async def cmd_today(message: Message) -> None:
 
     today = date.today()
     week_type = get_week_type(today, group["semester_start"])
-    lessons = get_day_schedule(group["group_name"], today.weekday(), week_type)
+    lessons = get_day_schedule(group["group_name"], today.weekday() + 1, week_type)
     text = format_day_schedule(lessons, today, group["semester_start"])
     await _send(message, text, week_type, group["group_name"])
 
@@ -91,7 +91,7 @@ async def cmd_tomorrow(message: Message) -> None:
 
     tomorrow = date.today() + timedelta(days = 1)
     week_type = get_week_type(tomorrow, group["semester_start"])
-    lessons = get_day_schedule(group["group_name"], tomorrow.weekday(), week_type)
+    lessons = get_day_schedule(group["group_name"], tomorrow.weekday() + 1, week_type)
     text = format_day_schedule(lessons, tomorrow, group["semester_start"])
     await _send(message, text, week_type, group["group_name"])
 
@@ -125,6 +125,7 @@ async def cmd_help(message: Message) -> None:
         "/today — расписание на сегодня\n"
         "/tomorrow — расписание на завтра\n"
         "/week — обзор на неделю\n"
+        "/edit — редактировать расписание\n"
         "/register — привязать группу к чату\n"
         "/unregister — отвязать группу\n"
         "/help — эта справка"
