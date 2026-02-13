@@ -19,23 +19,27 @@ logger = get_logger(__name__)
 router = Router()
 
 
-async def _is_any_chat_admin(message: Message) -> bool:
-    """Проверить, является ли пользователь админом хотя бы в одном зарегистрированном чате"""
+async def _get_admin_groups(message: Message) -> list[str]:
+    """Получить список групп, в чатах которых пользователь является админом"""
 
     groups = load_groups()
-    for chat_id in groups:
+    admin_groups = []
+    for chat_id, config in groups.items():
         try:
             member = await message.bot.get_chat_member(chat_id, message.from_user.id)
             if member.status in ("creator", "administrator"):
-                return True
+                admin_groups.append(config["group_name"])
         except Exception:
             continue
-    return False
+    return admin_groups
 
 
 @router.message(F.document, F.chat.type == "private")
 async def handle_pdf_upload(message: Message) -> None:
-    if message.from_user.id not in settings.ADMIN_IDS and not await _is_any_chat_admin(message):
+    is_global_admin = message.from_user.id in settings.ADMIN_IDS
+    admin_groups = [] if is_global_admin else await _get_admin_groups(message)
+
+    if not is_global_admin and not admin_groups:
         await message.answer("⛔ У вас нет прав для загрузки расписания")
         return
 
@@ -67,20 +71,37 @@ async def handle_pdf_upload(message: Message) -> None:
             )
             return
 
-        for group_name, lessons in all_groups.items():
+        if is_global_admin:
+            allowed_groups = all_groups
+        else:
+            allowed_groups = {
+                name: lessons for name, lessons in all_groups.items()
+                if name in admin_groups
+            }
+
+        if not allowed_groups:
+            found = ", ".join(all_groups.keys())
+            await status_msg.edit_text(
+                f"⚠️ В PDF найдены группы, но ни одна не совпадает с вашими\n"
+                f"Найдены: {found}\n"
+                f"Ваши группы: {', '.join(admin_groups)}"
+            )
+            return
+
+        for group_name, lessons in allowed_groups.items():
             save_schedule(group_name, lessons)
 
         group_list = "\n".join(
             f"  • {name}: {len(lessons)} пар"
-            for name, lessons in all_groups.items()
+            for name, lessons in allowed_groups.items()
         )
 
         await status_msg.edit_text(
             f"✅ Расписание обновлено!\n"
-            f"Найдено групп: {len(all_groups)}\n\n"
+            f"Обновлено групп: {len(allowed_groups)}\n\n"
             f"{group_list}"
         )
-        logger.info("Расписание обновлено для %d групп", len(all_groups))
+        logger.info("Расписание обновлено для %d групп", len(allowed_groups))
 
     except Exception:
         logger.exception("Ошибка при обработке PDF")
