@@ -11,7 +11,7 @@ from bot.config import settings
 from bot.logger import get_logger
 
 from bot.services.pdf_parser import parse_pdf_all_groups
-from bot.services.storage import save_schedule
+from bot.services.storage import save_schedule, load_groups
 
 
 logger = get_logger(__name__)
@@ -19,9 +19,23 @@ logger = get_logger(__name__)
 router = Router()
 
 
+async def _is_any_chat_admin(message: Message) -> bool:
+    """Проверить, является ли пользователь админом хотя бы в одном зарегистрированном чате"""
+
+    groups = load_groups()
+    for chat_id in groups:
+        try:
+            member = await message.bot.get_chat_member(chat_id, message.from_user.id)
+            if member.status in ("creator", "administrator"):
+                return True
+        except Exception:
+            continue
+    return False
+
+
 @router.message(F.document, F.chat.type == "private")
 async def handle_pdf_upload(message: Message) -> None:
-    if message.from_user.id not in settings.ADMIN_IDS:
+    if message.from_user.id not in settings.ADMIN_IDS and not await _is_any_chat_admin(message):
         await message.answer("⛔ У вас нет прав для загрузки расписания")
         return
 
