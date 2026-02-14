@@ -284,7 +284,7 @@ def parse_pdf_all_groups(file_path: str) -> dict[str, list[dict]]:
                 for cell in header:
                     if cell and cell.strip() and cell.strip() not in group_names:
                         clean = cell.strip()
-                        if re.match(r"^[А-ЯЁа-яё]+-[А-ЯЁа-яё]+\s+\d+", clean):
+                        if re.match(r"^[А-ЯЁа-яё]+(?:-[А-ЯЁа-яё]+)?\s+\d+", clean):
                             group_names.append(clean)
     except Exception:
         logger.exception("Ошибка при поиске групп в PDF")

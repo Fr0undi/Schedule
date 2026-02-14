@@ -25,11 +25,3 @@ def url_keyboard(base_url: str, week_type: str, group_name: str) -> InlineKeyboa
     ]])
 
 
-def group_selection_keyboard(groups: list[str]) -> InlineKeyboardMarkup:
-    """Клавиатура для выбора группы при /register"""
-
-    buttons = [
-        [InlineKeyboardButton(text = name, callback_data = f"reg:{name}")]
-        for name in groups
-    ]
-    return InlineKeyboardMarkup(inline_keyboard = buttons)
