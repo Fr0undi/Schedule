@@ -1,4 +1,4 @@
-"""Регистрация группы в чате: /register, /unregister"""
+"""Регистрация группы в чате: /register, /unregister + создание группы с нуля"""
 
 from aiogram import Router, F
 
@@ -13,11 +13,13 @@ from bot.logger import get_logger
 
 from bot.services.storage import (
     save_group,
+    save_schedule,
     remove_group,
     get_group_by_chat,
     list_available_groups,
     list_groups_filtered,
     load_university,
+    _find_schedule_path,
 )
 
 from bot.keyboards.register_kb import (
@@ -40,6 +42,14 @@ class RegisterSearch(StatesGroup):
     waiting_query = State()
 
 
+class RegisterCreate(StatesGroup):
+    waiting_name = State()
+
+
+def _is_global_admin(user_id: int) -> bool:
+    return user_id in settings.ADMIN_IDS
+
+
 async def _is_chat_admin(message: Message) -> bool:
     """Проверить, является ли отправитель админом чата"""
 
@@ -48,6 +58,12 @@ async def _is_chat_admin(message: Message) -> bool:
 
     member = await message.bot.get_chat_member(message.chat.id, message.from_user.id)
     return member.status in ("creator", "administrator")
+
+
+def _menu_kb(user_id: int) -> InlineKeyboardMarkup:
+    """Меню /register с учётом прав"""
+
+    return register_menu_kb(show_create = _is_global_admin(user_id))
 
 
 @router.message(Command("register"))
@@ -64,18 +80,19 @@ async def cmd_register(message: Message, state: FSMContext) -> None:
         )
         return
 
+    await state.clear()
+
     groups = list_available_groups()
-    if not groups:
+    if not groups and not _is_global_admin(message.from_user.id):
         await message.answer(
             "📭 Нет доступных групп\n"
             "Сначала загрузите PDF с расписанием боту в личные сообщения"
         )
         return
 
-    await state.clear()
     await message.answer(
         "📋 Выберите способ поиска группы:",
-        reply_markup = register_menu_kb(),
+        reply_markup = _menu_kb(message.from_user.id),
     )
 
 
@@ -88,7 +105,7 @@ async def cb_register_menu(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await callback.message.edit_text(
         "📋 Выберите способ поиска группы:",
-        reply_markup = register_menu_kb(),
+        reply_markup = _menu_kb(callback.from_user.id),
     )
     await callback.answer()
 
@@ -123,7 +140,7 @@ async def fsm_search_query(message: Message, state: FSMContext) -> None:
     if not results:
         await message.answer(
             f"❌ Группы по запросу «{message.text.strip()}» не найдены",
-            reply_markup = register_menu_kb(),
+            reply_markup = _menu_kb(message.from_user.id),
         )
         return
 
@@ -249,7 +266,7 @@ async def cb_register_course(callback: CallbackQuery) -> None:
         await callback.message.edit_text(
             "📭 Нет доступных групп для выбранных параметров\n"
             "Возможно, расписание ещё не загружено",
-            reply_markup = register_menu_kb(),
+            reply_markup = _menu_kb(callback.from_user.id),
         )
         await callback.answer()
         return
@@ -289,6 +306,257 @@ async def cb_register_group(callback: CallbackQuery) -> None:
         group_name, callback.message.chat.id, callback.from_user.id,
     )
 
+
+# ===== СОЗДАНИЕ ГРУППЫ С НУЛЯ =====
+
+def _cr_cancel_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard = [
+        [InlineKeyboardButton(text = "Отмена", callback_data = "cr:cancel")],
+    ])
+
+
+@router.callback_query(F.data == "cr:start")
+async def cb_create_start(callback: CallbackQuery, state: FSMContext) -> None:
+    """Начать создание группы"""
+
+    if not _is_global_admin(callback.from_user.id):
+        await callback.answer("⛔ Только глобальный админ", show_alert = True)
+        return
+
+    await state.set_state(RegisterCreate.waiting_name)
+    await callback.message.edit_text(
+        "📝 Введите название группы (например: ДМ 32-25):",
+        reply_markup = _cr_cancel_kb(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "cr:cancel")
+async def cb_create_cancel(callback: CallbackQuery, state: FSMContext) -> None:
+    """Отмена создания → вернуться в меню"""
+
+    await state.clear()
+    await callback.message.edit_text(
+        "📋 Выберите способ поиска группы:",
+        reply_markup = _menu_kb(callback.from_user.id),
+    )
+    await callback.answer()
+
+
+@router.message(RegisterCreate.waiting_name, F.text)
+async def fsm_create_name(message: Message, state: FSMContext) -> None:
+    """FSM: ввод названия группы → выбор формы"""
+
+    name = message.text.strip()
+
+    if _find_schedule_path(name):
+        await message.answer(
+            f"⚠️ Группа <b>{name}</b> уже существует\n"
+            "Выберите её через поиск или по структуре",
+            reply_markup = _menu_kb(message.from_user.id),
+        )
+        await state.clear()
+        return
+
+    await state.update_data(cr_group_name = name)
+
+    uni = load_university()
+    forms = uni.get("forms", [])
+
+    if not forms:
+        # Нет university.json → создать без метаданных и сразу привязать
+        save_schedule(name, [])
+        save_group(
+            chat_id = message.chat.id,
+            group_name = name,
+            semester_start = settings.SEMESTER_START,
+            registered_by = message.from_user.id,
+        )
+        await state.clear()
+        await message.answer(
+            f"✅ Группа <b>{name}</b> создана и привязана к чату\n"
+            "Используйте /edit для добавления пар"
+        )
+        logger.info("Создана и привязана группа [%s] в чате %d", name, message.chat.id)
+        return
+
+    buttons = [
+        [InlineKeyboardButton(text = f["name"], callback_data = f"cr:f:{f['code']}")]
+        for f in forms
+    ]
+    buttons.append([InlineKeyboardButton(text = "Отмена", callback_data = "cr:cancel")])
+
+    await state.set_state(None)
+    await message.answer(
+        f"Группа: <b>{name}</b>\n📋 Выберите форму обучения:",
+        reply_markup = InlineKeyboardMarkup(inline_keyboard = buttons),
+    )
+
+
+@router.callback_query(F.data == "cr:forms")
+async def cb_create_back_forms(callback: CallbackQuery, state: FSMContext) -> None:
+    """Назад к формам"""
+
+    data = await state.get_data()
+    name = data.get("cr_group_name", "")
+
+    uni = load_university()
+    forms = uni.get("forms", [])
+
+    buttons = [
+        [InlineKeyboardButton(text = f["name"], callback_data = f"cr:f:{f['code']}")]
+        for f in forms
+    ]
+    buttons.append([InlineKeyboardButton(text = "Отмена", callback_data = "cr:cancel")])
+
+    await callback.message.edit_text(
+        f"Группа: <b>{name}</b>\n📋 Выберите форму обучения:",
+        reply_markup = InlineKeyboardMarkup(inline_keyboard = buttons),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("cr:f:"))
+async def cb_create_form(callback: CallbackQuery, state: FSMContext) -> None:
+    """Форма выбрана → институты"""
+
+    form_code = callback.data.split(":")[2]
+    await state.update_data(cr_form = form_code)
+
+    uni = load_university()
+    form = next((f for f in uni.get("forms", []) if f["code"] == form_code), None)
+    if not form:
+        await callback.answer("Форма не найдена", show_alert = True)
+        return
+
+    buttons = [
+        [InlineKeyboardButton(
+            text = inst["name"],
+            callback_data = f"cr:i:{form_code}:{inst['code']}",
+        )]
+        for inst in form["institutes"]
+    ]
+    buttons.append([InlineKeyboardButton(text = "« Назад", callback_data = "cr:forms")])
+
+    await callback.message.edit_text(
+        "🏛 Выберите институт:",
+        reply_markup = InlineKeyboardMarkup(inline_keyboard = buttons),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("cr:i:"))
+async def cb_create_inst(callback: CallbackQuery, state: FSMContext) -> None:
+    """Институт выбран → уровни"""
+
+    parts = callback.data.split(":")
+    form_code, inst_code = parts[2], parts[3]
+
+    uni = load_university()
+    form = next((f for f in uni.get("forms", []) if f["code"] == form_code), None)
+    if not form:
+        await callback.answer("Форма не найдена", show_alert = True)
+        return
+
+    inst = next((i for i in form["institutes"] if i["code"] == inst_code), None)
+    if not inst:
+        await callback.answer("Институт не найден", show_alert = True)
+        return
+
+    buttons = [
+        [InlineKeyboardButton(
+            text = lv["name"],
+            callback_data = f"cr:l:{form_code}:{inst_code}:{lv['code']}",
+        )]
+        for lv in inst["levels"]
+    ]
+    buttons.append([InlineKeyboardButton(text = "« Назад", callback_data = f"cr:f:{form_code}")])
+
+    await callback.message.edit_text(
+        "📚 Выберите уровень обучения:",
+        reply_markup = InlineKeyboardMarkup(inline_keyboard = buttons),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("cr:l:"))
+async def cb_create_level(callback: CallbackQuery, state: FSMContext) -> None:
+    """Уровень выбран → курсы"""
+
+    parts = callback.data.split(":")
+    form_code, inst_code, level_code = parts[2], parts[3], parts[4]
+
+    uni = load_university()
+    form = next((f for f in uni.get("forms", []) if f["code"] == form_code), None)
+    if not form:
+        await callback.answer("Форма не найдена", show_alert = True)
+        return
+
+    inst = next((i for i in form["institutes"] if i["code"] == inst_code), None)
+    if not inst:
+        await callback.answer("Институт не найден", show_alert = True)
+        return
+
+    level = next((lv for lv in inst["levels"] if lv["code"] == level_code), None)
+    if not level:
+        await callback.answer("Уровень не найден", show_alert = True)
+        return
+
+    buttons = [
+        [InlineKeyboardButton(
+            text = f"{c} курс",
+            callback_data = f"cr:c:{form_code}:{inst_code}:{level_code}:{c}",
+        )]
+        for c in level["courses"]
+    ]
+    buttons.append([InlineKeyboardButton(text = "« Назад", callback_data = f"cr:i:{form_code}:{inst_code}")])
+
+    await callback.message.edit_text(
+        "🎓 Выберите курс:",
+        reply_markup = InlineKeyboardMarkup(inline_keyboard = buttons),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("cr:c:"))
+async def cb_create_course(callback: CallbackQuery, state: FSMContext) -> None:
+    """Курс выбран → создать группу и привязать к чату"""
+
+    parts = callback.data.split(":")
+    form_code, inst_code, level_code = parts[2], parts[3], parts[4]
+    course = int(parts[5])
+
+    data = await state.get_data()
+    name = data.get("cr_group_name", "")
+
+    if not name:
+        await callback.answer("Ошибка: название группы потеряно", show_alert = True)
+        return
+
+    # Создать пустое расписание с метаданными
+    save_schedule(name, [], form = form_code, institute = inst_code, level = level_code, course = course)
+
+    # Привязать к чату
+    save_group(
+        chat_id = callback.message.chat.id,
+        group_name = name,
+        semester_start = settings.SEMESTER_START,
+        registered_by = callback.from_user.id,
+    )
+
+    await state.clear()
+    await callback.message.edit_text(
+        f"✅ Группа <b>{name}</b> создана и привязана к чату\n"
+        "Используйте /edit для добавления пар"
+    )
+    await callback.answer()
+    logger.info(
+        "Создана и привязана группа [%s]: %s/%s/%s/%d, чат %d",
+        name, form_code, inst_code, level_code, course, callback.message.chat.id,
+    )
+
+
+# --- Unregister ---
 
 @router.message(Command("unregister"))
 async def cmd_unregister(message: Message) -> None:

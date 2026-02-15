@@ -223,9 +223,10 @@ def list_available_groups() -> list[str]:
     for path in SCHEDULES_DIR.rglob("*.json"):
         try:
             data = json.loads(path.read_text(encoding = "utf-8"))
-            if data.get("lessons"):
-                name = data.get("group_name") or path.stem.replace("_", " ").strip()
-                groups.append(name)
+            if "lessons" not in data:
+                continue
+            name = data.get("group_name") or path.stem.replace("_", " ").strip()
+            groups.append(name)
         except Exception:
             continue
     return sorted(groups)
@@ -272,7 +273,7 @@ def list_groups_filtered(
     for path in search_dir.rglob("*.json"):
         try:
             data = json.loads(path.read_text(encoding = "utf-8"))
-            if not data.get("lessons"):
+            if "lessons" not in data:
                 continue
             if level and data.get("level") != level:
                 continue

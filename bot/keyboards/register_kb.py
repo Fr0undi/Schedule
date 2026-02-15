@@ -3,13 +3,16 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
-def register_menu_kb() -> InlineKeyboardMarkup:
-    """Главное меню /register: поиск или пошагово"""
+def register_menu_kb(show_create: bool = False) -> InlineKeyboardMarkup:
+    """Главное меню /register: поиск, пошагово, создать"""
 
-    return InlineKeyboardMarkup(inline_keyboard = [
+    buttons = [
         [InlineKeyboardButton(text = "🔍 Поиск по названию", callback_data = "rg:search")],
         [InlineKeyboardButton(text = "📋 Выбрать по структуре", callback_data = "rg:step")],
-    ])
+    ]
+    if show_create:
+        buttons.append([InlineKeyboardButton(text = "➕ Создать группу", callback_data = "cr:start")])
+    return InlineKeyboardMarkup(inline_keyboard = buttons)
 
 
 def register_forms_kb(forms: list[dict]) -> InlineKeyboardMarkup:
