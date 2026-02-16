@@ -2,6 +2,7 @@
 
 import re
 
+from collections import Counter
 from pathlib import Path
 
 import pdfplumber
@@ -40,23 +41,63 @@ TYPE_MAP: dict[str, str] = {
 
 
 def _parse_day_name(cell: str) -> int | None:
-    """Распознать день недели из ячейки вида 'П\\nО\\nН\\nЕ\\nД...'"""
+    """Распознать день недели из ячейки
+
+    Обрабатывает оба формата:
+    - нормальный: 'П\\nО\\nН\\nЕ\\nД...' → ПОНЕДЕЛЬНИК
+    - перемешанный: 'ПОН\\nД ЛЬНИК Е Е' → анаграмма ПОНЕДЕЛЬНИК
+    """
 
     if not cell:
         return None
-    clean = cell.replace("\n", "").strip()
+
+    # Оставляем только кириллические буквы
+    letters = re.sub(r"[^А-ЯЁ]", "", cell.upper())
+    if not letters:
+        return None
+
+    # Точное совпадение (нормальный формат)
     for name, idx in DAY_NAMES.items():
-        if clean == name:
+        if letters == name:
             return idx
+
+    # Совпадение как анаграмма (перемешанный формат, допуск лишних символов)
+    letter_count = Counter(letters)
+    for name, idx in DAY_NAMES.items():
+        name_count = Counter(name)
+        # Все буквы дня присутствуют в ячейке
+        if all(letter_count[c] >= name_count[c] for c in name_count):
+            extra = sum(letter_count.values()) - sum(name_count.values())
+            if extra <= 2:
+                return idx
+
     return None
 
 
 def _parse_time(cell: str) -> tuple[str, str]:
-    """Распознать время из ячейки вида '09.00-\\n10.35' → ('09:00', '10:35')"""
+    """Распознать время из ячейки
 
-    clean = cell.replace("\n", "").replace(" ", "").replace(".", ":")
+    Обрабатывает оба формата:
+    - нормальный: '09.00-\\n10.35' → ('09:00', '10:35')
+    - чередующийся: '0190..0305-' → deinterleave → ('09:00', '10:35')
+    """
+
+    clean = cell.replace("\n", "").replace(" ", "")
+    # Убрать нецифровой мусор в начале (напр. 'ы' от 'Часы')
+    clean = re.sub(r"^[^\d]+", "", clean)
+
+    # Чередующийся формат: XXYY..XXYY- (символы двух строк через один)
+    if re.match(r"^\d{4}\.\.\d{4}-?$", clean):
+        even = clean[0::2]  # чётные позиции → время начала
+        odd = clean[1::2]   # нечётные → время конца
+        t_start = even.rstrip("-").replace(".", ":")
+        t_end = odd.rstrip("-").replace(".", ":")
+        return t_start, t_end
+
+    # Нормальный формат: 09.00-10.35
+    clean = clean.replace(".", ":")
     parts = clean.split("-")
-    return parts[0], parts[1]
+    return parts[0], parts[1] if len(parts) > 1 else ""
 
 
 def _parse_cell(text: str) -> dict | None:
@@ -148,9 +189,18 @@ def parse_pdf(file_path: str, group_name: str) -> list[dict]:
                     continue
 
                 header = table[0]
+
+                # Определяем, есть ли столбец "Дни"
+                h0 = re.sub(r"[^А-ЯЁа-яё]", "", header[0] or "").lower()
+                h1 = re.sub(r"[^А-ЯЁа-яё]", "", header[1] or "").lower() if len(header) > 1 else ""
+                has_day_col = h1.startswith("час") or h0 in ("дни", "дин", "день", "д")
+                time_col = 1 if has_day_col else 0
+                group_start = time_col + 1
+
                 # Ищем столбец нужной группы
                 col_idx: int | None = None
-                for ci, cell in enumerate(header):
+                for ci in range(group_start, len(header)):
+                    cell = header[ci]
                     if cell and group_name in cell:
                         col_idx = ci
                         break
@@ -159,8 +209,8 @@ def parse_pdf(file_path: str, group_name: str) -> list[dict]:
                     continue
 
                 logger.info(
-                    "Стр. %d: найдена группа '%s' в столбце %d",
-                    page_idx, group_name, col_idx,
+                    "Стр. %d: найдена группа '%s' в столбце %d (day_col=%s)",
+                    page_idx, group_name, col_idx, has_day_col,
                 )
 
                 # Собираем временные слоты
@@ -168,8 +218,8 @@ def parse_pdf(file_path: str, group_name: str) -> list[dict]:
                 current_day: int = 0
 
                 for row in table[1:]:
-                    day_cell = row[0]
-                    time_cell = row[1]
+                    day_cell = row[0] if has_day_col else None
+                    time_cell = row[time_col] if time_col < len(row) else None
                     group_cell = row[col_idx] if col_idx < len(row) else None
 
                     # Определяем день
@@ -187,6 +237,11 @@ def parse_pdf(file_path: str, group_name: str) -> list[dict]:
                             continue
 
                         lesson_num = LESSON_NUM_BY_START.get(t_start, 0)
+
+                        # Без столбца дней: новый день при t_start == "09:00"
+                        if not has_day_col and t_start == "09:00":
+                            current_day += 1
+
                         time_slots.append({
                             "day": current_day,
                             "time_start": t_start,
