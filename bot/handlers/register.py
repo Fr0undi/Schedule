@@ -1,5 +1,6 @@
 """Регистрация группы в чате: /register, /unregister + создание группы с нуля"""
 
+import re
 from urllib.parse import quote
 
 from aiogram import Router, F
@@ -175,14 +176,24 @@ async def cb_register_search(callback: CallbackQuery, state: FSMContext) -> None
     await callback.answer()
 
 
+def _normalize(text: str) -> str:
+    """Убрать пробелы, дефисы и привести к нижнему регистру для нечёткого поиска"""
+
+    return re.sub(r"[\s\-]+", "", text).lower()
+
+
 @router.message(RegisterSearch.waiting_query, F.text)
 async def fsm_search_query(message: Message, state: FSMContext) -> None:
     """FSM: поиск групп по введённому тексту"""
 
     query = message.text.strip().lower()
+    query_norm = _normalize(query)
     all_groups = list_available_groups()
 
-    results = [g for g in all_groups if query in g.lower()]
+    results = [
+        g for g in all_groups
+        if query in g.lower() or query_norm in _normalize(g)
+    ]
 
     await state.clear()
 
