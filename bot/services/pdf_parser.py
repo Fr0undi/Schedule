@@ -125,7 +125,7 @@ def _parse_cell(text: str) -> dict | None:
             break
 
     # Ищем преподавателя: ФАМИЛИЯ И.О. (кириллица, всё заглавные)
-    teacher_match = re.search(r"([А-ЯЁ]{2,})\s+([А-ЯЁ]\.[А-ЯЁ]\.)", full)
+    teacher_match = re.search(r"([А-ЯЁ]{2,})\s+([А-ЯЁ]\.[А-ЯЁ]\.?)", full)
 
     teacher: str | None = None
     subject: str = full
@@ -183,7 +183,7 @@ def parse_pdf(file_path: str, group_name: str) -> list[dict]:
 
     try:
         for page_idx, page in enumerate(pdf.pages):
-            tables = page.extract_tables()
+            tables = page.extract_tables({"text_y_tolerance": 1})
             for table in tables:
                 if not table or len(table) < 2:
                     continue
@@ -331,7 +331,7 @@ def parse_pdf_all_groups(file_path: str) -> dict[str, list[dict]]:
     group_names: list[str] = []
     try:
         for page in pdf.pages:
-            tables = page.extract_tables()
+            tables = page.extract_tables({"text_y_tolerance": 1})
             for table in tables:
                 if not table or len(table) < 2:
                     continue
