@@ -1,9 +1,14 @@
 """Регистрация группы в чате: /register, /unregister + создание группы с нуля"""
 
+from urllib.parse import quote
+
 from aiogram import Router, F
 
 from aiogram.filters import Command
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import (
+    Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton,
+    MenuButtonWebApp, MenuButtonDefault, WebAppInfo,
+)
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 
@@ -64,6 +69,36 @@ def _menu_kb(user_id: int) -> InlineKeyboardMarkup:
     """Меню /register с учётом прав"""
 
     return register_menu_kb(show_create = _is_global_admin(user_id))
+
+
+async def _set_menu_button(bot, chat_id: int, group_name: str) -> None:
+    """Установить Menu Button с мини-приложением для чата"""
+
+    if not settings.WEBAPP_BASE_URL.startswith("https://"):
+        return
+    url = f"{settings.WEBAPP_BASE_URL}?group={quote(group_name)}"
+    try:
+        await bot.set_chat_menu_button(
+            chat_id = chat_id,
+            menu_button = MenuButtonWebApp(
+                text = "Расписание",
+                web_app = WebAppInfo(url = url),
+            ),
+        )
+    except Exception:
+        logger.warning("Не удалось установить menu button для чата %d", chat_id)
+
+
+async def _reset_menu_button(bot, chat_id: int) -> None:
+    """Сбросить Menu Button на стандартную"""
+
+    try:
+        await bot.set_chat_menu_button(
+            chat_id = chat_id,
+            menu_button = MenuButtonDefault(),
+        )
+    except Exception:
+        logger.warning("Не удалось сбросить menu button для чата %d", chat_id)
 
 
 @router.message(Command("register"))
@@ -300,6 +335,8 @@ async def cb_register_group(callback: CallbackQuery) -> None:
         registered_by = callback.from_user.id,
     )
 
+    await _set_menu_button(callback.bot, callback.message.chat.id, group_name)
+
     await callback.message.edit_text(f"✅ Группа <b>{group_name}</b> привязана к этому чату")
     logger.info(
         "Группа [%s] зарегистрирована в чате %d пользователем %d",
@@ -372,6 +409,7 @@ async def fsm_create_name(message: Message, state: FSMContext) -> None:
             semester_start = settings.SEMESTER_START,
             registered_by = message.from_user.id,
         )
+        await _set_menu_button(message.bot, message.chat.id, name)
         await state.clear()
         await message.answer(
             f"✅ Группа <b>{name}</b> создана и привязана к чату\n"
@@ -544,6 +582,8 @@ async def cb_create_course(callback: CallbackQuery, state: FSMContext) -> None:
         registered_by = callback.from_user.id,
     )
 
+    await _set_menu_button(callback.bot, callback.message.chat.id, name)
+
     await state.clear()
     await callback.message.edit_text(
         f"✅ Группа <b>{name}</b> создана и привязана к чату\n"
@@ -565,6 +605,7 @@ async def cmd_unregister(message: Message) -> None:
         return
 
     if remove_group(message.chat.id):
+        await _reset_menu_button(message.bot, message.chat.id)
         await message.answer("✅ Группа отвязана от этого чата")
     else:
         await message.answer("Этот чат не привязан ни к одной группе")

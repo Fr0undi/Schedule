@@ -7,6 +7,7 @@ from aiogram import Bot, Dispatcher
 
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.types import MenuButtonWebApp, WebAppInfo
 
 from bot.config import settings
 
@@ -41,6 +42,16 @@ async def main() -> None:
     config = uvicorn.Config(webapp_app, host = "0.0.0.0", port = 8080, log_level = "info")
     server = uvicorn.Server(config)
     asyncio.create_task(server.serve())
+
+    # Установить кнопку меню (мини-приложение)
+    if settings.WEBAPP_BASE_URL.startswith("https://"):
+        await bot.set_chat_menu_button(
+            menu_button = MenuButtonWebApp(
+                text = "Расписание",
+                web_app = WebAppInfo(url = settings.WEBAPP_BASE_URL),
+            ),
+        )
+        logger.info("Menu button установлена: %s", settings.WEBAPP_BASE_URL)
 
     logger.info("Бот запущен")
 
