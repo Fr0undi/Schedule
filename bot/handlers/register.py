@@ -7,7 +7,7 @@ from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import (
     Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton,
-    MenuButtonWebApp, MenuButtonDefault, WebAppInfo,
+    MenuButtonWebApp, MenuButtonDefault, WebAppInfo, ForceReply,
 )
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
@@ -152,12 +152,26 @@ async def cb_register_search(callback: CallbackQuery, state: FSMContext) -> None
     """Начать поиск по названию"""
 
     await state.set_state(RegisterSearch.waiting_query)
-    await callback.message.edit_text(
-        "🔍 Введите название группы (или часть названия):",
-        reply_markup = InlineKeyboardMarkup(inline_keyboard = [
-            [InlineKeyboardButton(text = "« Назад", callback_data = "rg:menu")],
-        ]),
-    )
+
+    # В группах бот не видит обычные сообщения (privacy mode).
+    # ForceReply заставляет клиент показать reply-интерфейс,
+    # а ответ на сообщение бота бот получает всегда.
+    if callback.message.chat.type != "private":
+        await callback.message.edit_text(
+            "🔍 Введите название группы (или часть названия).\n"
+            "Для отмены — /register",
+        )
+        await callback.message.answer(
+            "↩️ Ответьте на это сообщение названием группы:",
+            reply_markup = ForceReply(selective = True),
+        )
+    else:
+        await callback.message.edit_text(
+            "🔍 Введите название группы (или часть названия):",
+            reply_markup = InlineKeyboardMarkup(inline_keyboard = [
+                [InlineKeyboardButton(text = "« Назад", callback_data = "rg:menu")],
+            ]),
+        )
     await callback.answer()
 
 
@@ -361,10 +375,21 @@ async def cb_create_start(callback: CallbackQuery, state: FSMContext) -> None:
         return
 
     await state.set_state(RegisterCreate.waiting_name)
-    await callback.message.edit_text(
-        "📝 Введите название группы (например: ДМ 32-25):",
-        reply_markup = _cr_cancel_kb(),
-    )
+
+    if callback.message.chat.type != "private":
+        await callback.message.edit_text(
+            "📝 Введите название группы (например: ДМ 32-25).\n"
+            "Для отмены — /register",
+        )
+        await callback.message.answer(
+            "↩️ Ответьте на это сообщение названием группы:",
+            reply_markup = ForceReply(selective = True),
+        )
+    else:
+        await callback.message.edit_text(
+            "📝 Введите название группы (например: ДМ 32-25):",
+            reply_markup = _cr_cancel_kb(),
+        )
     await callback.answer()
 
 

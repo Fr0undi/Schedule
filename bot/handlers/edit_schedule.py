@@ -2,7 +2,7 @@
 
 from aiogram import Router, F
 from aiogram.filters import Command
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, ForceReply
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 
@@ -345,10 +345,17 @@ async def cb_add_lesson_type(callback: CallbackQuery, state: FSMContext) -> None
     )
     await state.set_state(EditSchedule.add_subject)
 
-    await callback.message.edit_text(
-        "📝 Введите название предмета:",
-        reply_markup = cancel_kb(),
-    )
+    if callback.message.chat.type != "private":
+        await callback.message.edit_text("📝 Введите название предмета:")
+        await callback.message.answer(
+            "↩️ Ответьте на это сообщение:",
+            reply_markup = ForceReply(selective = True),
+        )
+    else:
+        await callback.message.edit_text(
+            "📝 Введите название предмета:",
+            reply_markup = cancel_kb(),
+        )
     await callback.answer()
 
 
@@ -358,10 +365,17 @@ async def fsm_add_subject(message: Message, state: FSMContext) -> None:
 
     await state.update_data(add_subject = message.text.strip())
     await state.set_state(EditSchedule.add_teacher)
-    await message.answer(
-        "👤 Введите ФИО преподавателя\n(или <code>-</code> чтобы пропустить):",
-        reply_markup = cancel_kb(),
-    )
+
+    if message.chat.type != "private":
+        await message.answer(
+            "👤 Введите ФИО преподавателя (или <code>-</code> чтобы пропустить):",
+            reply_markup = ForceReply(selective = True),
+        )
+    else:
+        await message.answer(
+            "👤 Введите ФИО преподавателя\n(или <code>-</code> чтобы пропустить):",
+            reply_markup = cancel_kb(),
+        )
 
 
 @router.message(EditSchedule.add_teacher, F.text)
@@ -371,10 +385,17 @@ async def fsm_add_teacher(message: Message, state: FSMContext) -> None:
     teacher = message.text.strip()
     await state.update_data(add_teacher = None if teacher == "-" else teacher)
     await state.set_state(EditSchedule.add_room)
-    await message.answer(
-        "🚪 Введите номер аудитории\n(или <code>-</code> чтобы пропустить):",
-        reply_markup = cancel_kb(),
-    )
+
+    if message.chat.type != "private":
+        await message.answer(
+            "🚪 Введите номер аудитории (или <code>-</code> чтобы пропустить):",
+            reply_markup = ForceReply(selective = True),
+        )
+    else:
+        await message.answer(
+            "🚪 Введите номер аудитории\n(или <code>-</code> чтобы пропустить):",
+            reply_markup = cancel_kb(),
+        )
 
 
 @router.message(EditSchedule.add_room, F.text)
@@ -510,11 +531,22 @@ async def cb_edit_field(callback: CallbackQuery, state: FSMContext) -> None:
         field_name = FIELD_NAMES.get(field, "значение")
         await state.update_data(edit_field = field, edit_field_idx = idx)
         await state.set_state(EditSchedule.edit_value)
-        await callback.message.edit_text(
-            f"Введите новое значение для поля <b>{field_name}</b>\n"
-            "(или <code>-</code> чтобы очистить):",
-            reply_markup = cancel_kb(),
-        )
+
+        if callback.message.chat.type != "private":
+            await callback.message.edit_text(
+                f"Введите новое значение для поля <b>{field_name}</b>\n"
+                "(или <code>-</code> чтобы очистить):",
+            )
+            await callback.message.answer(
+                "↩️ Ответьте на это сообщение:",
+                reply_markup = ForceReply(selective = True),
+            )
+        else:
+            await callback.message.edit_text(
+                f"Введите новое значение для поля <b>{field_name}</b>\n"
+                "(или <code>-</code> чтобы очистить):",
+                reply_markup = cancel_kb(),
+            )
 
     await callback.answer()
 
