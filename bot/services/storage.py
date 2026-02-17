@@ -180,13 +180,27 @@ def save_group(chat_id: int, group_name: str, semester_start: str, registered_by
     """Зарегистрировать группу для чата"""
 
     groups = _load_groups_raw()
+    old = groups.get(str(chat_id), {})
     groups[str(chat_id)] = {
         "group_name": group_name,
         "semester_start": semester_start,
         "registered_by": registered_by,
+        "topic_id": old.get("topic_id"),
     }
     _save_groups_raw(groups)
     logger.info("Группа [%s] привязана к чату %d", group_name, chat_id)
+
+
+def save_topic(chat_id: int, topic_id: int | None) -> bool:
+    """Привязать тему (topic) для ежедневной рассылки. None — сбросить."""
+
+    groups = _load_groups_raw()
+    key = str(chat_id)
+    if key not in groups:
+        return False
+    groups[key]["topic_id"] = topic_id
+    _save_groups_raw(groups)
+    return True
 
 
 def remove_group(chat_id: int) -> bool:

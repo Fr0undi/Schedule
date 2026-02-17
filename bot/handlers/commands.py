@@ -12,7 +12,7 @@ from bot.config import settings
 
 from bot.logger import get_logger
 
-from bot.services.storage import get_day_schedule, get_full_schedule, get_group_by_chat
+from bot.services.storage import get_day_schedule, get_full_schedule, get_group_by_chat, save_topic
 from bot.services.week_utils import get_week_type
 from bot.services.formatter import format_day_schedule, format_week_overview
 
@@ -115,6 +115,27 @@ async def cmd_chatid(message: Message) -> None:
     await message.answer(f"Chat ID: <code>{message.chat.id}</code>")
 
 
+@router.message(Command("settopic"))
+async def cmd_settopic(message: Message) -> None:
+    if message.chat.type == "private":
+        await message.answer("Эта команда работает только в группах с темами")
+        return
+
+    topic_id = message.message_thread_id
+    if not topic_id:
+        # Написано в General или группа без тем — сбросить привязку
+        if save_topic(message.chat.id, None):
+            await message.answer("✅ Рассылка будет приходить в основной чат (без темы)")
+        else:
+            await message.answer(NOT_REGISTERED)
+        return
+
+    if save_topic(message.chat.id, topic_id):
+        await message.answer("✅ Ежедневная рассылка будет приходить в эту тему")
+    else:
+        await message.answer(NOT_REGISTERED)
+
+
 @router.message(Command("help"))
 async def cmd_help(message: Message) -> None:
     group = _get_group(message.chat.id)
@@ -128,6 +149,7 @@ async def cmd_help(message: Message) -> None:
         "/edit — редактировать расписание\n"
         "/register — привязать группу к чату\n"
         "/unregister — отвязать группу\n"
+        "/settopic — рассылка в эту тему\n"
         "/help — эта справка"
     )
     await message.answer(text)

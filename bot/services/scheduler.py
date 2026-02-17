@@ -23,14 +23,23 @@ from bot.keyboards.inline import webapp_keyboard, url_keyboard
 logger = get_logger(__name__)
 
 
-async def _send_to_chat(bot: Bot, chat_id: int, text: str, week_type: str, group_name: str) -> None:
+async def _send_to_chat(
+    bot: Bot, chat_id: int, text: str,
+    week_type: str, group_name: str,
+    topic_id: int | None = None,
+) -> None:
     """Отправить сообщение в чат с фоллбэком кнопки"""
+
+    kwargs = {}
+    if topic_id:
+        kwargs["message_thread_id"] = topic_id
 
     if settings.WEBAPP_BASE_URL.startswith("https://"):
         try:
             await bot.send_message(
                 chat_id, text,
                 reply_markup = webapp_keyboard(settings.WEBAPP_BASE_URL, week_type, group_name),
+                **kwargs,
             )
             return
         except TelegramBadRequest:
@@ -38,9 +47,10 @@ async def _send_to_chat(bot: Bot, chat_id: int, text: str, week_type: str, group
             await bot.send_message(
                 chat_id, text,
                 reply_markup = url_keyboard(settings.WEBAPP_BASE_URL, week_type, group_name),
+                **kwargs,
             )
             return
-    await bot.send_message(chat_id, text)
+    await bot.send_message(chat_id, text, **kwargs)
 
 
 async def send_daily_schedule(bot: Bot) -> None:
@@ -58,21 +68,26 @@ async def send_daily_schedule(bot: Bot) -> None:
     for chat_id, group_config in groups.items():
         group_name = group_config["group_name"]
         semester_start = group_config["semester_start"]
+        topic_id = group_config.get("topic_id")
+
+        kwargs = {}
+        if topic_id:
+            kwargs["message_thread_id"] = topic_id
 
         try:
             if weekday == 7:
-                await bot.send_message(chat_id, "🎉 Завтра воскресенье! Отдыхайте")
+                await bot.send_message(chat_id, "🎉 Завтра воскресенье! Отдыхайте", **kwargs)
                 continue
 
             week_type = get_week_type(tomorrow, semester_start)
             lessons = get_day_schedule(group_name, weekday, week_type)
 
             if weekday == 6 and not lessons:
-                await bot.send_message(chat_id, "🎉 Завтра суббота без пар! Отдыхайте")
+                await bot.send_message(chat_id, "🎉 Завтра суббота без пар! Отдыхайте", **kwargs)
                 continue
 
             text = format_day_schedule(lessons, tomorrow, semester_start)
-            await _send_to_chat(bot, chat_id, text, week_type, group_name)
+            await _send_to_chat(bot, chat_id, text, week_type, group_name, topic_id)
             logger.info("Расписание отправлено в чат %d [%s]", chat_id, group_name)
 
         except Exception:
