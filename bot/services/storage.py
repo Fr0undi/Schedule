@@ -106,6 +106,7 @@ def save_schedule(
     new_path.parent.mkdir(parents = True, exist_ok = True)
     new_path.write_text(json.dumps(data, ensure_ascii = False, indent = 2), encoding = "utf-8")
     logger.info("Расписание сохранено [%s]: %s", group_name, new_path.relative_to(SCHEDULES_DIR))
+    invalidate_teacher_cache()
 
 
 def load_schedule(group_name: str) -> list[dict]:
@@ -296,3 +297,81 @@ def list_groups_filtered(
         except Exception:
             continue
     return sorted(groups)
+
+
+# --- Преподаватели ---
+
+_teacher_cache: dict[str, list[dict]] | None = None
+
+
+def _normalize_teacher(name: str) -> str:
+    """Нормализация ФИО: убрать пробелы, гарантировать точку в конце"""
+
+    name = name.strip().rstrip(".")
+    return name + "."
+
+
+def _build_teacher_index() -> dict[str, list[dict]]:
+    """Построить индекс {ФИО: [lesson+group_name, ...]} из всех расписаний"""
+
+    global _teacher_cache
+    if _teacher_cache is not None:
+        return _teacher_cache
+
+    index: dict[str, list[dict]] = {}
+    if not SCHEDULES_DIR.exists():
+        _teacher_cache = {}
+        return _teacher_cache
+
+    for path in SCHEDULES_DIR.rglob("*.json"):
+        try:
+            data = json.loads(path.read_text(encoding = "utf-8"))
+            if "lessons" not in data:
+                continue
+            group_name = data.get("group_name") or path.stem.replace("_", " ").strip()
+            for lesson in data["lessons"]:
+                teacher = lesson.get("teacher")
+                if not teacher:
+                    continue
+                normalized = _normalize_teacher(teacher)
+                enriched = {**lesson, "group_name": group_name}
+                index.setdefault(normalized, []).append(enriched)
+        except Exception:
+            continue
+
+    _teacher_cache = index
+    return _teacher_cache
+
+
+def invalidate_teacher_cache() -> None:
+    """Сбросить кэш преподавателей (вызывать после изменения расписаний)"""
+
+    global _teacher_cache
+    _teacher_cache = None
+
+
+def list_available_teachers() -> list[str]:
+    """Отсортированный список всех уникальных преподавателей"""
+
+    index = _build_teacher_index()
+    return sorted(index.keys())
+
+
+def get_teacher_full_schedule(teacher_name: str, week_type: str) -> dict[int, list[dict]]:
+    """Расписание преподавателя, сгруппированное по дням"""
+
+    index = _build_teacher_index()
+    lessons = index.get(teacher_name, [])
+    result: dict[int, list[dict]] = {}
+    for day in range(1, 7):
+        day_lessons = sorted(
+            [
+                l for l in lessons
+                if l["weekday"] == day
+                and l["week_type"] in ("both", week_type)
+            ],
+            key = lambda l: l["lesson_number"],
+        )
+        if day_lessons:
+            result[day] = day_lessons
+    return result

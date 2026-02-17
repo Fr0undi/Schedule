@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Расписание {{ teacher_name }}</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="/static/style.css?v={{ v }}">
+</head>
+<body>
+    <div class="header">
+        <a href="/teachers" class="back-link">&larr; Преподаватели</a>
+        <h1>{{ teacher_name }}</h1>
+        <div class="subtitle">{{ week_num }}-я учебная неделя</div>
+    </div>
+
+    <div class="tabs">
+        <button class="tab {% if week_type == 'odd' %}active{% endif %}" data-week="odd">
+            Нечётная неделя
+        </button>
+        <button class="tab {% if week_type == 'even' %}active{% endif %}" data-week="even">
+            Чётная неделя
+        </button>
+    </div>
+
+    {% for wt, schedule, display in [('odd', odd_schedule, odd_display), ('even', even_schedule, even_display)] %}
+    <div class="week-content {% if week_type == wt %}active{% endif %}" data-week="{{ wt }}">
+        {% for day_idx in range(1, 7) %}
+        {% set lessons = schedule.get(day_idx, []) %}
+        <div class="day-card {% if day_idx == today_weekday and week_type == wt %}today open{% endif %}">
+            <div class="day-header">
+                <span class="day-name">{{ day_names[day_idx - 1] }}</span>
+                <span class="day-count">
+                    {% if lessons %}{{ lessons|length }} {{ lessons|length|lesson_word }}{% else %}нет пар{% endif %}
+                </span>
+                <span class="arrow">&#9660;</span>
+            </div>
+            <div class="day-body">
+                {% if not lessons %}
+                <div class="day-empty">Нет пар</div>
+                {% else %}
+                    {% for lesson in lessons %}
+                    <div class="lesson">
+                        <div class="lesson-time">{{ lesson.time_start }} – {{ lesson.time_end }}</div>
+                        <div class="lesson-subject">
+                            {{ type_emoji.get(lesson.lesson_type, '') }}
+                            {{ lesson.subject }}
+                        </div>
+                        <div class="lesson-details">
+                            {{ lesson.lesson_type }} - {{ lesson.group_name }}{% if lesson.room %} - ауд. {{ lesson.room }}{% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+
+    <script src="/static/app.js?v={{ v }}"></script>
+</body>
+</html>

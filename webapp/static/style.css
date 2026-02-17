@@ -36,6 +36,32 @@ body {
     margin-bottom: 4px;
 }
 
+/* Навигация Группы / Преподаватели */
+.nav-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 12px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+}
+
+.nav-tab {
+    flex: 1;
+    padding: 10px 0;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    color: var(--tg-theme-text-color, #000000);
+    transition: all 0.2s;
+}
+
+.nav-tab.active {
+    background: var(--tg-theme-button-color, #3390ec);
+    color: var(--tg-theme-button-text-color, #ffffff);
+}
+
 /* Табы переключения недель */
 .tabs {
     display: flex;

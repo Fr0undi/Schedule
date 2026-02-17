@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Выбор преподавателя</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="/static/style.css?v={{ v }}">
+</head>
+<body>
+    <div class="header">
+        <h1>Расписание</h1>
+        <div class="subtitle">Выберите преподавателя</div>
+    </div>
+
+    <div class="nav-tabs">
+        <a href="/" class="nav-tab">Группы</a>
+        <a href="/teachers" class="nav-tab active">Преподаватели</a>
+    </div>
+
+    <div class="search-wrapper">
+        <span class="search-icon">&#128269;</span>
+        <input type="text" class="search-box" placeholder="Фамилия преподавателя..." autocomplete="off">
+    </div>
+
+    <div class="no-results" style="display: none;">Ничего не найдено</div>
+
+    <div class="group-list">
+        {% if teachers %}
+            {% for teacher in teachers %}
+            <a href="/teachers?name={{ teacher }}" class="group-card">
+                {{ teacher }}
+            </a>
+            {% endfor %}
+        {% else %}
+            <div class="day-empty">Нет данных о преподавателях</div>
+        {% endif %}
+    </div>
+
+    <script src="/static/app.js?v={{ v }}"></script>
+</body>
+</html>
