@@ -28,6 +28,14 @@ body {
     color: var(--tg-theme-hint-color, #999999);
 }
 
+.back-link {
+    display: inline-block;
+    font-size: 13px;
+    color: var(--tg-theme-link-color, #3390ec);
+    text-decoration: none;
+    margin-bottom: 4px;
+}
+
 /* Табы переключения недель */
 .tabs {
     display: flex;

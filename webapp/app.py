@@ -13,7 +13,7 @@ from bot.services.storage import get_full_schedule, list_available_groups
 from bot.services.week_utils import get_week_type, get_week_type_display, get_week_number
 from bot.services.formatter import _lesson_word
 
-STATIC_VERSION = "2"
+STATIC_VERSION = "3"
 
 app = FastAPI(title = "Schedule WebApp")
 app.mount("/static", StaticFiles(directory = "webapp/static"), name = "static")
