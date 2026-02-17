@@ -56,16 +56,25 @@ async def _send(message: Message, text: str, week_type: str, group_name: str) ->
 @router.message(Command("start"))
 async def cmd_start(message: Message) -> None:
     group = _get_group(message.chat.id)
-    if group:
-        status = f"Привязана группа: <b>{group['group_name']}</b>"
-    else:
-        status = "Группа не привязана — используйте /register"
 
-    await message.answer(
-        f"👋 Привет! Я бот расписания\n\n"
-        f"{status}\n\n"
-        "Команды: /today /tomorrow /week /edit /help"
-    )
+    if group:
+        group_name = group["group_name"]
+        await message.answer(
+            f"👋 Привет! Я бот расписания РГАУ-МСХА\n\n"
+            f"Привязана группа: <b>{group_name}</b>\n\n"
+            "📅 /today — расписание на сегодня\n"
+            "📅 /tomorrow — расписание на завтра\n"
+            "📆 /week — обзор на неделю\n"
+            "✏️ /edit — редактировать расписание\n"
+            "📋 /register — сменить группу\n"
+            "📖 /help — все команды",
+        )
+    else:
+        await message.answer(
+            "👋 Привет! Я бот расписания РГАУ-МСХА\n\n"
+            "Чтобы начать, привяжите группу к этому чату:\n"
+            "/register — выбрать группу",
+        )
 
 
 @router.message(Command("today"))
