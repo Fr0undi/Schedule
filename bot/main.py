@@ -7,7 +7,7 @@ from aiogram import Bot, Dispatcher
 
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.types import MenuButtonWebApp, WebAppInfo
+from aiogram.types import MenuButtonWebApp, WebAppInfo, BotCommand
 
 from bot.config import settings
 
@@ -42,6 +42,19 @@ async def main() -> None:
     config = uvicorn.Config(webapp_app, host = "0.0.0.0", port = 8080, log_level = "info")
     server = uvicorn.Server(config)
     asyncio.create_task(server.serve())
+
+    # Зарегистрировать команды в меню Telegram
+    await bot.set_my_commands([
+        BotCommand(command = "today", description = "Расписание на сегодня"),
+        BotCommand(command = "tomorrow", description = "Расписание на завтра"),
+        BotCommand(command = "week", description = "Обзор на неделю"),
+        BotCommand(command = "edit", description = "Редактировать расписание"),
+        BotCommand(command = "register", description = "Привязать группу к чату"),
+        BotCommand(command = "unregister", description = "Отвязать группу"),
+        BotCommand(command = "settopic", description = "Рассылка в эту тему"),
+        BotCommand(command = "help", description = "Справка"),
+    ])
+    logger.info("Команды бота зарегистрированы")
 
     # Установить кнопку меню (мини-приложение)
     if settings.WEBAPP_BASE_URL.startswith("https://"):
