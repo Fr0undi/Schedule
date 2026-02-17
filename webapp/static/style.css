@@ -147,6 +147,52 @@ body {
     color: var(--tg-theme-hint-color, #999999);
 }
 
+/* Поиск группы */
+.search-wrapper {
+    position: relative;
+    margin-bottom: 12px;
+}
+
+.search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 16px;
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+.search-box {
+    width: 100%;
+    padding: 14px 16px 14px 40px;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-family: inherit;
+    font-weight: 500;
+    background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+    color: var(--tg-theme-text-color, #000000);
+    outline: none;
+    -webkit-appearance: none;
+}
+
+.search-box::placeholder {
+    color: var(--tg-theme-hint-color, #999999);
+    font-weight: 400;
+}
+
+.group-card.hidden {
+    display: none;
+}
+
+.no-results {
+    text-align: center;
+    padding: 20px 0;
+    font-size: 14px;
+    color: var(--tg-theme-hint-color, #999999);
+}
+
 /* Список групп */
 .group-list {
     display: flex;

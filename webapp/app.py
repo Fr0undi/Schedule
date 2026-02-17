@@ -13,10 +13,13 @@ from bot.services.storage import get_full_schedule, list_available_groups
 from bot.services.week_utils import get_week_type, get_week_type_display, get_week_number
 from bot.services.formatter import _lesson_word
 
+STATIC_VERSION = "2"
+
 app = FastAPI(title = "Schedule WebApp")
 app.mount("/static", StaticFiles(directory = "webapp/static"), name = "static")
 templates = Jinja2Templates(directory = "webapp/templates")
 templates.env.filters["lesson_word"] = _lesson_word
+templates.env.globals["v"] = STATIC_VERSION
 
 DAY_NAMES = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"]
 

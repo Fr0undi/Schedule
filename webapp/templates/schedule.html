@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Расписание {{ group_name }}</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v={{ v }}">
 </head>
 <body>
     <div class="header">
@@ -64,6 +64,6 @@
     </div>
     {% endfor %}
 
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v={{ v }}"></script>
 </body>
 </html>

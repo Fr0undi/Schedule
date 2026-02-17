@@ -28,4 +28,31 @@ document.addEventListener("DOMContentLoaded", function () {
             this.parentElement.classList.toggle("open");
         });
     });
+
+    // Поиск группы
+    var searchBox = document.querySelector(".search-box");
+    var noResults = document.querySelector(".no-results");
+    var groupCards = document.querySelectorAll(".group-card");
+
+    function normalize(text) {
+        return text.replace(/[\s\-]+/g, "").toLowerCase();
+    }
+
+    if (searchBox && groupCards.length) {
+        searchBox.addEventListener("input", function () {
+            var query = normalize(this.value);
+            var visible = 0;
+
+            groupCards.forEach(function (card) {
+                var name = normalize(card.textContent);
+                var match = !query || name.indexOf(query) !== -1;
+                card.classList.toggle("hidden", !match);
+                if (match) visible++;
+            });
+
+            if (noResults) {
+                noResults.style.display = (query && visible === 0) ? "" : "none";
+            }
+        });
+    }
 });
