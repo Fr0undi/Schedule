@@ -31,9 +31,13 @@ body {
 .back-link {
     display: inline-block;
     font-size: 13px;
-    color: var(--tg-theme-link-color, #3390ec);
+    font-weight: 500;
+    color: var(--tg-theme-button-text-color, #ffffff);
+    background: var(--tg-theme-button-color, #3390ec);
     text-decoration: none;
-    margin-bottom: 4px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    margin-bottom: 8px;
 }
 
 /* Заголовок с кнопкой избранного */
