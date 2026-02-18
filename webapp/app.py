@@ -16,7 +16,7 @@ from bot.services.storage import (
 from bot.services.week_utils import get_week_type, get_week_type_display, get_week_number
 from bot.services.formatter import _lesson_word
 
-STATIC_VERSION = "4"
+STATIC_VERSION = "6"
 
 app = FastAPI(title = "Schedule WebApp")
 app.mount("/static", StaticFiles(directory = "webapp/static"), name = "static")

@@ -5,13 +5,75 @@ document.addEventListener("DOMContentLoaded", function () {
         Telegram.WebApp.expand();
     }
 
-    // Переключение табов (чёт/нечёт)
-    const tabs = document.querySelectorAll(".tab");
-    const weekContents = document.querySelectorAll(".week-content");
+    // === Избранное (localStorage) ===
+
+    function getFavorites(key) {
+        try {
+            return JSON.parse(localStorage.getItem(key)) || [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function saveFavorites(key, list) {
+        localStorage.setItem(key, JSON.stringify(list));
+    }
+
+    function isFavorite(key, name) {
+        return getFavorites(key).indexOf(name) !== -1;
+    }
+
+    function toggleFavorite(key, name) {
+        var favs = getFavorites(key);
+        var idx = favs.indexOf(name);
+        if (idx !== -1) {
+            favs.splice(idx, 1);
+        } else {
+            favs.unshift(name);
+        }
+        saveFavorites(key, favs);
+        return idx === -1; // true = добавлено
+    }
+
+    // Кнопка-звёздочка на странице расписания
+    var favBtn = document.querySelector(".fav-btn");
+    if (favBtn) {
+        var type = favBtn.dataset.type;
+        var name = favBtn.dataset.name;
+        if (isFavorite(type, name)) {
+            favBtn.classList.add("active");
+        }
+        favBtn.addEventListener("click", function () {
+            var added = toggleFavorite(type, name);
+            this.classList.toggle("active", added);
+        });
+    }
+
+    // Секция избранного на страницах выбора
+    var favSection = document.querySelector(".favorites-section");
+    if (favSection) {
+        var favType = favSection.dataset.type;
+        var urlTemplate = favSection.dataset.urlTemplate;
+        var favs = getFavorites(favType);
+        if (favs.length > 0) {
+            var html = '<div class="favorites-title">Избранное</div><div class="favorites-list">';
+            favs.forEach(function (name) {
+                var url = urlTemplate.replace("{name}", encodeURIComponent(name));
+                html += '<a href="' + url + '" class="group-card fav-card">' + name + '</a>';
+            });
+            html += '</div>';
+            favSection.innerHTML = html;
+        }
+    }
+
+    // === Переключение табов (чёт/нечёт) ===
+
+    var tabs = document.querySelectorAll(".tab");
+    var weekContents = document.querySelectorAll(".week-content");
 
     tabs.forEach(function (tab) {
         tab.addEventListener("click", function () {
-            const target = this.dataset.week;
+            var target = this.dataset.week;
 
             tabs.forEach(function (t) { t.classList.remove("active"); });
             this.classList.add("active");
@@ -22,14 +84,16 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
 
-    // Аккордеон: раскрытие/сворачивание дней
+    // === Аккордеон: раскрытие/сворачивание дней ===
+
     document.querySelectorAll(".day-header").forEach(function (header) {
         header.addEventListener("click", function () {
             this.parentElement.classList.toggle("open");
         });
     });
 
-    // Поиск
+    // === Поиск ===
+
     var searchBox = document.querySelector(".search-box");
     var noResults = document.querySelector(".no-results");
     var searchResults = document.querySelector(".search-results");
@@ -45,16 +109,16 @@ document.addEventListener("DOMContentLoaded", function () {
             var query = normalize(this.value);
 
             if (!query) {
-                // Пустой поиск — показать иерархию
                 searchResults.style.display = "none";
                 instituteList.style.display = "";
+                if (favSection) favSection.style.display = "";
                 noResults.style.display = "none";
                 return;
             }
 
-            // Есть запрос — показать плоские результаты
             searchResults.style.display = "";
             instituteList.style.display = "none";
+            if (favSection) favSection.style.display = "none";
 
             var visible = 0;
             searchItems.forEach(function (card) {
@@ -81,6 +145,10 @@ document.addEventListener("DOMContentLoaded", function () {
                 card.classList.toggle("hidden", !match);
                 if (match) visible++;
             });
+
+            if (favSection) {
+                favSection.style.display = query ? "none" : "";
+            }
 
             if (noResults) {
                 noResults.style.display = (query && visible === 0) ? "" : "none";
