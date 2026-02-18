@@ -29,16 +29,48 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
 
-    // Поиск группы
+    // Поиск
     var searchBox = document.querySelector(".search-box");
     var noResults = document.querySelector(".no-results");
-    var groupCards = document.querySelectorAll(".group-card");
+    var searchResults = document.querySelector(".search-results");
+    var instituteList = document.querySelector(".institute-list");
+    var searchItems = document.querySelectorAll(".search-item");
 
     function normalize(text) {
         return text.replace(/[\s\-]+/g, "").toLowerCase();
     }
 
-    if (searchBox && groupCards.length) {
+    if (searchBox && searchItems.length) {
+        searchBox.addEventListener("input", function () {
+            var query = normalize(this.value);
+
+            if (!query) {
+                // Пустой поиск — показать иерархию
+                searchResults.style.display = "none";
+                instituteList.style.display = "";
+                noResults.style.display = "none";
+                return;
+            }
+
+            // Есть запрос — показать плоские результаты
+            searchResults.style.display = "";
+            instituteList.style.display = "none";
+
+            var visible = 0;
+            searchItems.forEach(function (card) {
+                var name = normalize(card.textContent);
+                var match = name.indexOf(query) !== -1;
+                card.classList.toggle("hidden", !match);
+                if (match) visible++;
+            });
+
+            noResults.style.display = visible === 0 ? "" : "none";
+        });
+    }
+
+    // Поиск на странице преподавателей (без иерархии)
+    var groupCards = document.querySelectorAll(".group-list:not(.search-results) .group-card");
+    if (searchBox && !searchItems.length && groupCards.length) {
         searchBox.addEventListener("input", function () {
             var query = normalize(this.value);
             var visible = 0;

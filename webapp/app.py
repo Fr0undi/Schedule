@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 from bot.config import settings
 
 from bot.services.storage import (
-    get_full_schedule, list_available_groups,
+    get_full_schedule, list_groups_structured,
     list_available_teachers, get_teacher_full_schedule,
 )
 from bot.services.week_utils import get_week_type, get_week_type_display, get_week_number
@@ -40,10 +40,10 @@ async def schedule_page(
     group: str = Query(default = None),
 ):
     if not group:
-        groups = list_available_groups()
+        institutes = list_groups_structured()
         return templates.TemplateResponse("select_group.html", {
             "request": request,
-            "groups": groups,
+            "institutes": institutes,
         })
 
     today = date.today()

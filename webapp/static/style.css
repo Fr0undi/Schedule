@@ -142,6 +142,10 @@ body {
     max-height: 2000px;
 }
 
+.institute-card.open .day-body {
+    max-height: 5000px;
+}
+
 /* Карточки пар */
 .lesson {
     padding: 8px 16px 12px;
@@ -244,6 +248,43 @@ body {
     text-decoration: none;
     color: var(--tg-theme-text-color, #000000);
     text-align: center;
+}
+
+/* Институты — аккордеон */
+.institute-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.institute-card .institute-name {
+    font-size: 13px;
+}
+
+.course-section {
+    padding: 8px 12px 12px;
+    border-top: 1px solid var(--tg-theme-bg-color, #ffffff);
+}
+
+.course-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--tg-theme-hint-color, #999999);
+    margin-bottom: 8px;
+}
+
+.course-groups {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.course-groups .group-card {
+    flex: 0 0 auto;
+    padding: 8px 14px;
+    font-size: 13px;
+    border-radius: 8px;
+    background: var(--tg-theme-bg-color, #ffffff);
 }
 
 /* Скрытие контента для неактивной недели */

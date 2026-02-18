@@ -247,6 +247,51 @@ def list_available_groups() -> list[str]:
     return sorted(groups)
 
 
+def list_groups_structured() -> list[dict]:
+    """Группы, сгруппированные по институтам и курсам.
+
+    Возвращает: [{name: "Институт ...", courses: [{course: 1, groups: [...]}, ...]}, ...]
+    """
+
+    if not SCHEDULES_DIR.exists():
+        return []
+
+    # Загрузить названия институтов из university.json
+    uni = load_university()
+    inst_names: dict[str, str] = {}
+    for form in uni.get("forms", []):
+        for inst in form.get("institutes", []):
+            inst_names[inst["code"]] = inst["name"]
+
+    # Собрать группы с метаданными
+    by_inst: dict[str, dict[int, list[str]]] = {}
+    for path in SCHEDULES_DIR.rglob("*.json"):
+        try:
+            data = json.loads(path.read_text(encoding = "utf-8"))
+            if "lessons" not in data:
+                continue
+            name = data.get("group_name") or path.stem.replace("_", " ").strip()
+            institute = data.get("institute", "other")
+            course = data.get("course", 0)
+            by_inst.setdefault(institute, {}).setdefault(course, []).append(name)
+        except Exception:
+            continue
+
+    # Сформировать результат
+    result = []
+    for inst_code in sorted(by_inst.keys(), key = lambda c: inst_names.get(c, c)):
+        courses = []
+        for course_num in sorted(by_inst[inst_code].keys()):
+            groups = sorted(by_inst[inst_code][course_num])
+            courses.append({"course": course_num, "groups": groups})
+        result.append({
+            "name": inst_names.get(inst_code, inst_code),
+            "code": inst_code,
+            "courses": courses,
+        })
+    return result
+
+
 # --- Университет ---
 
 def load_university() -> dict:
@@ -357,19 +402,37 @@ def list_available_teachers() -> list[str]:
     return sorted(index.keys())
 
 
+def _merge_teacher_lessons(lessons: list[dict]) -> list[dict]:
+    """Объединить пары с одинаковым временем/предметом/типом (поток → одна пара)"""
+
+    merged: dict[tuple, dict] = {}
+    for l in lessons:
+        key = (l["weekday"], l["lesson_number"], l["week_type"], l["subject"], l["lesson_type"])
+        if key in merged:
+            existing = merged[key]
+            if l["group_name"] not in existing["group_name"]:
+                existing["group_name"] += "; " + l["group_name"]
+            if l.get("room") and l["room"] not in (existing.get("room") or ""):
+                existing["room"] = (existing.get("room") or "") + "; " + l["room"]
+        else:
+            merged[key] = {**l}
+    return list(merged.values())
+
+
 def get_teacher_full_schedule(teacher_name: str, week_type: str) -> dict[int, list[dict]]:
     """Расписание преподавателя, сгруппированное по дням"""
 
     index = _build_teacher_index()
     lessons = index.get(teacher_name, [])
+    filtered = [
+        l for l in lessons
+        if l["week_type"] in ("both", week_type)
+    ]
+    merged = _merge_teacher_lessons(filtered)
     result: dict[int, list[dict]] = {}
     for day in range(1, 7):
         day_lessons = sorted(
-            [
-                l for l in lessons
-                if l["weekday"] == day
-                and l["week_type"] in ("both", week_type)
-            ],
+            [l for l in merged if l["weekday"] == day],
             key = lambda l: l["lesson_number"],
         )
         if day_lessons:
