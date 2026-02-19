@@ -4,11 +4,12 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
 def register_menu_kb(show_create: bool = False) -> InlineKeyboardMarkup:
-    """Главное меню /register: поиск, пошагово, создать"""
+    """Главное меню /register: поиск, пошагово, преподаватель, создать"""
 
     buttons = [
-        [InlineKeyboardButton(text = "🔍 Поиск по названию", callback_data = "rg:search")],
-        [InlineKeyboardButton(text = "📋 Выбрать по структуре", callback_data = "rg:step")],
+        [InlineKeyboardButton(text = "🔍 Поиск группы", callback_data = "rg:search")],
+        [InlineKeyboardButton(text = "📋 Выбрать группу по структуре", callback_data = "rg:step")],
+        [InlineKeyboardButton(text = "👨\u200d🏫 Найти преподавателя", callback_data = "rg:tsearch")],
     ]
     if show_create:
         buttons.append([InlineKeyboardButton(text = "➕ Создать группу", callback_data = "cr:start")])
@@ -78,5 +79,17 @@ def search_results_kb(groups: list[str]) -> InlineKeyboardMarkup:
         for name in groups
     ]
     buttons.append([InlineKeyboardButton(text = "🔍 Новый поиск", callback_data = "rg:search")])
+    buttons.append([InlineKeyboardButton(text = "« В меню", callback_data = "rg:menu")])
+    return InlineKeyboardMarkup(inline_keyboard = buttons)
+
+
+def teacher_search_results_kb(teachers: list[str]) -> InlineKeyboardMarkup:
+    """Результаты поиска преподавателей"""
+
+    buttons = [
+        [InlineKeyboardButton(text = name, callback_data = f"rg:t:{name}")]
+        for name in teachers
+    ]
+    buttons.append([InlineKeyboardButton(text = "🔍 Новый поиск", callback_data = "rg:tsearch")])
     buttons.append([InlineKeyboardButton(text = "« В меню", callback_data = "rg:menu")])
     return InlineKeyboardMarkup(inline_keyboard = buttons)

@@ -130,7 +130,7 @@ async def cmd_edit(message: Message, state: FSMContext) -> None:
 
     group_name = _get_group_name(message.chat.id)
     if not group_name:
-        await message.answer("❓ Группа не привязана к этому чату\nИспользуйте /register для привязки")
+        await message.answer("❓ Расписание не привязано к этому чату\nИспользуйте /register для привязки")
         return
 
     await state.clear()
@@ -150,7 +150,7 @@ async def cb_menu(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     group_name = _get_group_name(callback.message.chat.id)
     if not group_name:
-        await callback.message.edit_text("❓ Группа не привязана")
+        await callback.message.edit_text("❓ Расписание не привязано")
         return
 
     await state.update_data(group_name = group_name)
@@ -200,7 +200,7 @@ async def cb_delete_day(callback: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     group_name = data.get("group_name") or _get_group_name(callback.message.chat.id)
     if not group_name:
-        await callback.message.edit_text("❓ Группа не привязана")
+        await callback.message.edit_text("❓ Расписание не привязано")
         return
 
     lessons = load_schedule(group_name)
@@ -407,7 +407,7 @@ async def fsm_add_room(message: Message, state: FSMContext) -> None:
 
     group_name = data.get("group_name") or _get_group_name(message.chat.id)
     if not group_name:
-        await message.answer("❓ Группа не привязана")
+        await message.answer("❓ Расписание не привязано")
         await state.clear()
         return
 
@@ -466,7 +466,7 @@ async def cb_edit_day(callback: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     group_name = data.get("group_name") or _get_group_name(callback.message.chat.id)
     if not group_name:
-        await callback.message.edit_text("❓ Группа не привязана")
+        await callback.message.edit_text("❓ Расписание не привязано")
         return
 
     lessons = load_schedule(group_name)

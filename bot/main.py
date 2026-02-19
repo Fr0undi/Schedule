@@ -49,8 +49,8 @@ async def main() -> None:
         BotCommand(command = "tomorrow", description = "Расписание на завтра"),
         BotCommand(command = "week", description = "Обзор на неделю"),
         BotCommand(command = "edit", description = "Редактировать расписание"),
-        BotCommand(command = "register", description = "Привязать группу к чату"),
-        BotCommand(command = "unregister", description = "Отвязать группу"),
+        BotCommand(command = "register", description = "Привязать расписание к чату"),
+        BotCommand(command = "unregister", description = "Снять привязанное расписание"),
         BotCommand(command = "settopic", description = "Рассылка в эту тему"),
         BotCommand(command = "help", description = "Справка"),
     ])

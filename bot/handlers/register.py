@@ -19,13 +19,16 @@ from bot.logger import get_logger
 
 from bot.services.storage import (
     save_group,
+    save_teacher_binding,
     save_schedule,
     remove_group,
     get_group_by_chat,
     list_available_groups,
+    list_available_teachers,
     list_groups_filtered,
     load_university,
     _find_schedule_path,
+    _normalize_teacher,
 )
 
 from bot.keyboards.register_kb import (
@@ -36,6 +39,7 @@ from bot.keyboards.register_kb import (
     register_courses_kb,
     register_groups_kb,
     search_results_kb,
+    teacher_search_results_kb,
 )
 
 
@@ -45,6 +49,10 @@ router = Router()
 
 
 class RegisterSearch(StatesGroup):
+    waiting_query = State()
+
+
+class RegisterTeacherSearch(StatesGroup):
     waiting_query = State()
 
 
@@ -90,6 +98,24 @@ async def _set_menu_button(bot, chat_id: int, group_name: str) -> None:
         logger.warning("Не удалось установить menu button для чата %d", chat_id)
 
 
+async def _set_teacher_menu_button(bot, chat_id: int, teacher_name: str) -> None:
+    """Установить Menu Button с расписанием преподавателя"""
+
+    if not settings.WEBAPP_BASE_URL.startswith("https://"):
+        return
+    url = f"{settings.WEBAPP_BASE_URL}/teachers?name={quote(teacher_name)}"
+    try:
+        await bot.set_chat_menu_button(
+            chat_id = chat_id,
+            menu_button = MenuButtonWebApp(
+                text = "Расписание",
+                web_app = WebAppInfo(url = url),
+            ),
+        )
+    except Exception:
+        logger.warning("Не удалось установить menu button для чата %d", chat_id)
+
+
 async def _reset_menu_button(bot, chat_id: int) -> None:
     """Сбросить Menu Button на стандартную"""
 
@@ -105,29 +131,23 @@ async def _reset_menu_button(bot, chat_id: int) -> None:
 @router.message(Command("register"))
 async def cmd_register(message: Message, state: FSMContext) -> None:
     if not await _is_chat_admin(message):
-        await message.answer("⛔ Только администратор чата может регистрировать группу")
+        await message.answer("⛔ Только администратор чата может менять привязку")
         return
 
     existing = get_group_by_chat(message.chat.id)
     if existing:
+        bound = existing.get("teacher_name") or existing.get("group_name", "")
+        label = "преподавателю" if existing.get("teacher_name") else "группе"
         await message.answer(
-            f"Этот чат уже привязан к группе <b>{existing['group_name']}</b>\n"
+            f"Этот чат уже привязан к {label} <b>{bound}</b>\n"
             "Используйте /unregister чтобы отвязать"
         )
         return
 
     await state.clear()
 
-    groups = list_available_groups()
-    if not groups and not _is_global_admin(message.from_user.id):
-        await message.answer(
-            "📭 Нет доступных групп\n"
-            "Сначала загрузите PDF с расписанием боту в личные сообщения"
-        )
-        return
-
     await message.answer(
-        "📋 Выберите способ поиска группы:",
+        "📋 Выберите, что привязать к чату:",
         reply_markup = _menu_kb(message.from_user.id),
     )
 
@@ -140,7 +160,7 @@ async def cb_register_menu(callback: CallbackQuery, state: FSMContext) -> None:
 
     await state.clear()
     await callback.message.edit_text(
-        "📋 Выберите способ поиска группы:",
+        "📋 Выберите, что привязать к чату:",
         reply_markup = _menu_kb(callback.from_user.id),
     )
     await callback.answer()
@@ -159,7 +179,7 @@ async def cb_register_search(callback: CallbackQuery, state: FSMContext) -> None
     # а ответ на сообщение бота бот получает всегда.
     if callback.message.chat.type != "private":
         await callback.message.edit_text(
-            "🔍 Введите название группы (или часть названия).\n"
+            "🔍 Введите название группы.\n"
             "Для отмены — /register",
         )
         await callback.message.answer(
@@ -168,7 +188,7 @@ async def cb_register_search(callback: CallbackQuery, state: FSMContext) -> None
         )
     else:
         await callback.message.edit_text(
-            "🔍 Введите название группы (или часть названия):",
+            "🔍 Введите название группы:",
             reply_markup = InlineKeyboardMarkup(inline_keyboard = [
                 [InlineKeyboardButton(text = "« Назад", callback_data = "rg:menu")],
             ]),
@@ -210,6 +230,93 @@ async def fsm_search_query(message: Message, state: FSMContext) -> None:
     await message.answer(
         f"🔍 Найдено групп: {len(results)}",
         reply_markup = search_results_kb(results),
+    )
+
+
+# --- Поиск преподавателя ---
+
+@router.callback_query(F.data == "rg:tsearch")
+async def cb_register_teacher_search(callback: CallbackQuery, state: FSMContext) -> None:
+    """Начать поиск преподавателя"""
+
+    await state.set_state(RegisterTeacherSearch.waiting_query)
+
+    if callback.message.chat.type != "private":
+        await callback.message.edit_text(
+            "🔍 Введите фамилию преподавателя.\n"
+            "Для отмены — /register",
+        )
+        await callback.message.answer(
+            "↩️ Ответьте на это сообщение фамилией преподавателя:",
+            reply_markup = ForceReply(selective = True),
+        )
+    else:
+        await callback.message.edit_text(
+            "🔍 Введите фамилию преподавателя:",
+            reply_markup = InlineKeyboardMarkup(inline_keyboard = [
+                [InlineKeyboardButton(text = "« Назад", callback_data = "rg:menu")],
+            ]),
+        )
+    await callback.answer()
+
+
+@router.message(RegisterTeacherSearch.waiting_query, F.text)
+async def fsm_teacher_search_query(message: Message, state: FSMContext) -> None:
+    """FSM: поиск преподавателей по введённому тексту"""
+
+    query = message.text.strip().lower()
+    query_norm = _normalize(query)
+    all_teachers = list_available_teachers()
+
+    results = [
+        t for t in all_teachers
+        if query in t.lower() or query_norm in _normalize(t)
+    ]
+
+    await state.clear()
+
+    if not results:
+        await message.answer(
+            f"❌ Преподаватели по запросу «{message.text.strip()}» не найдены",
+            reply_markup = _menu_kb(message.from_user.id),
+        )
+        return
+
+    if len(results) > 20:
+        results = results[:20]
+
+    await message.answer(
+        f"🔍 Найдено преподавателей: {len(results)}",
+        reply_markup = teacher_search_results_kb(results),
+    )
+
+
+@router.callback_query(F.data.startswith("rg:t:"))
+async def cb_register_teacher(callback: CallbackQuery) -> None:
+    """Преподаватель выбран → привязать к чату"""
+
+    teacher_name = callback.data[5:]
+
+    # Проверить права админа
+    if callback.message.chat.type != "private":
+        member = await callback.bot.get_chat_member(callback.message.chat.id, callback.from_user.id)
+        if member.status not in ("creator", "administrator") and callback.from_user.id not in settings.ADMIN_IDS:
+            await callback.answer("⛔ Только админ может привязывать расписание", show_alert = True)
+            return
+
+    save_teacher_binding(
+        chat_id = callback.message.chat.id,
+        teacher_name = teacher_name,
+        semester_start = settings.SEMESTER_START,
+        registered_by = callback.from_user.id,
+    )
+
+    await _set_teacher_menu_button(callback.bot, callback.message.chat.id, teacher_name)
+
+    await callback.message.edit_text(f"✅ Расписание преподавателя <b>{teacher_name}</b> привязано к этому чату")
+    logger.info(
+        "Преподаватель [%s] зарегистрирован в чате %d пользователем %d",
+        teacher_name, callback.message.chat.id, callback.from_user.id,
     )
 
 
@@ -350,7 +457,7 @@ async def cb_register_group(callback: CallbackQuery) -> None:
     if callback.message.chat.type != "private":
         member = await callback.bot.get_chat_member(callback.message.chat.id, callback.from_user.id)
         if member.status not in ("creator", "administrator") and callback.from_user.id not in settings.ADMIN_IDS:
-            await callback.answer("⛔ Только админ может выбирать группу", show_alert = True)
+            await callback.answer("⛔ Только админ может менять привязку", show_alert = True)
             return
 
     save_group(
@@ -637,11 +744,11 @@ async def cb_create_course(callback: CallbackQuery, state: FSMContext) -> None:
 @router.message(Command("unregister"))
 async def cmd_unregister(message: Message) -> None:
     if not await _is_chat_admin(message):
-        await message.answer("⛔ Только администратор чата может отвязать группу")
+        await message.answer("⛔ Только администратор чата может снять привязанное расписание")
         return
 
     if remove_group(message.chat.id):
         await _reset_menu_button(message.bot, message.chat.id)
-        await message.answer("✅ Группа отвязана от этого чата")
+        await message.answer("✅ Расписание отвязано")
     else:
-        await message.answer("Этот чат не привязан ни к одной группе")
+        await message.answer("Этот чат ни к чему не привязан")

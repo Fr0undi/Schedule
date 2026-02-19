@@ -12,11 +12,17 @@ from bot.config import settings
 
 from bot.logger import get_logger
 
-from bot.services.storage import get_day_schedule, get_full_schedule, get_group_by_chat, save_topic
+from bot.services.storage import (
+    get_day_schedule, get_full_schedule, get_group_by_chat, save_topic,
+    get_teacher_day_schedule, get_teacher_full_schedule,
+)
 from bot.services.week_utils import get_week_type
-from bot.services.formatter import format_day_schedule, format_week_overview
+from bot.services.formatter import format_day_schedule, format_teacher_day_schedule, format_week_overview
 
-from bot.keyboards.inline import webapp_keyboard, url_keyboard
+from bot.keyboards.inline import (
+    webapp_keyboard, url_keyboard,
+    teacher_webapp_keyboard, teacher_url_keyboard,
+)
 
 
 logger = get_logger(__name__)
@@ -24,7 +30,7 @@ logger = get_logger(__name__)
 router = Router()
 
 
-NOT_REGISTERED = "❓ Группа не привязана к этому чату\nИспользуйте /register для привязки"
+NOT_REGISTERED = "❓ Расписание не привязано к этому чату\nИспользуйте /register для привязки"
 
 
 def _get_group(chat_id: int) -> dict | None:
@@ -33,22 +39,25 @@ def _get_group(chat_id: int) -> dict | None:
     return get_group_by_chat(chat_id)
 
 
-async def _send(message: Message, text: str, week_type: str, group_name: str) -> None:
+async def _send(
+    message: Message, text: str, week_type: str,
+    group_name: str | None = None, teacher_name: str | None = None,
+) -> None:
     """Отправить с WebApp-кнопкой, при ошибке — без неё"""
 
     if settings.WEBAPP_BASE_URL.startswith("https://"):
+        if teacher_name:
+            kb = teacher_webapp_keyboard(settings.WEBAPP_BASE_URL, week_type, teacher_name)
+            fallback_kb = teacher_url_keyboard(settings.WEBAPP_BASE_URL, week_type, teacher_name)
+        else:
+            kb = webapp_keyboard(settings.WEBAPP_BASE_URL, week_type, group_name)
+            fallback_kb = url_keyboard(settings.WEBAPP_BASE_URL, week_type, group_name)
         try:
-            await message.answer(
-                text,
-                reply_markup = webapp_keyboard(settings.WEBAPP_BASE_URL, week_type, group_name),
-            )
+            await message.answer(text, reply_markup = kb)
             return
         except TelegramBadRequest:
             logger.warning("WebApp-кнопка не прошла, отправляю URL-кнопку")
-            await message.answer(
-                text,
-                reply_markup = url_keyboard(settings.WEBAPP_BASE_URL, week_type, group_name),
-            )
+            await message.answer(text, reply_markup = fallback_kb)
             return
     await message.answer(text)
 
@@ -58,22 +67,23 @@ async def cmd_start(message: Message) -> None:
     group = _get_group(message.chat.id)
 
     if group:
-        group_name = group["group_name"]
+        bound = group.get("teacher_name") or group.get("group_name", "")
+        label = "Преподаватель" if group.get("teacher_name") else "Группа"
         await message.answer(
             f"👋 Привет! Я бот расписания РГАУ-МСХА\n\n"
-            f"Привязана группа: <b>{group_name}</b>\n\n"
+            f"{label}: <b>{bound}</b>\n\n"
             "📅 /today — расписание на сегодня\n"
             "📅 /tomorrow — расписание на завтра\n"
             "📆 /week — обзор на неделю\n"
             "✏️ /edit — редактировать расписание\n"
-            "📋 /register — сменить группу\n"
+            "📋 /register — сменить привязку\n"
             "📖 /help — все команды",
         )
     else:
         await message.answer(
             "👋 Привет! Я бот расписания РГАУ-МСХА\n\n"
-            "Чтобы начать, привяжите группу к этому чату:\n"
-            "/register — выбрать группу",
+            "Чтобы начать, привяжите группу или преподавателя:\n"
+            "/register — выбрать",
         )
 
 
@@ -86,9 +96,17 @@ async def cmd_today(message: Message) -> None:
 
     today = date.today()
     week_type = get_week_type(today, group["semester_start"])
-    lessons = get_day_schedule(group["group_name"], today.weekday() + 1, week_type)
-    text = format_day_schedule(lessons, today, group["semester_start"])
-    await _send(message, text, week_type, group["group_name"])
+
+    if group.get("teacher_name"):
+        teacher = group["teacher_name"]
+        lessons = get_teacher_day_schedule(teacher, today.weekday() + 1, week_type)
+        text = format_teacher_day_schedule(lessons, today, group["semester_start"])
+        await _send(message, text, week_type, teacher_name = teacher)
+    else:
+        gname = group["group_name"]
+        lessons = get_day_schedule(gname, today.weekday() + 1, week_type)
+        text = format_day_schedule(lessons, today, group["semester_start"])
+        await _send(message, text, week_type, group_name = gname)
 
 
 @router.message(Command("tomorrow"))
@@ -100,9 +118,17 @@ async def cmd_tomorrow(message: Message) -> None:
 
     tomorrow = date.today() + timedelta(days = 1)
     week_type = get_week_type(tomorrow, group["semester_start"])
-    lessons = get_day_schedule(group["group_name"], tomorrow.weekday() + 1, week_type)
-    text = format_day_schedule(lessons, tomorrow, group["semester_start"])
-    await _send(message, text, week_type, group["group_name"])
+
+    if group.get("teacher_name"):
+        teacher = group["teacher_name"]
+        lessons = get_teacher_day_schedule(teacher, tomorrow.weekday() + 1, week_type)
+        text = format_teacher_day_schedule(lessons, tomorrow, group["semester_start"])
+        await _send(message, text, week_type, teacher_name = teacher)
+    else:
+        gname = group["group_name"]
+        lessons = get_day_schedule(gname, tomorrow.weekday() + 1, week_type)
+        text = format_day_schedule(lessons, tomorrow, group["semester_start"])
+        await _send(message, text, week_type, group_name = gname)
 
 
 @router.message(Command("week"))
@@ -114,9 +140,17 @@ async def cmd_week(message: Message) -> None:
 
     today = date.today()
     week_type = get_week_type(today, group["semester_start"])
-    full = get_full_schedule(group["group_name"], week_type)
-    text = format_week_overview(full, week_type, group["semester_start"], today)
-    await _send(message, text, week_type, group["group_name"])
+
+    if group.get("teacher_name"):
+        teacher = group["teacher_name"]
+        full = get_teacher_full_schedule(teacher, week_type)
+        text = format_week_overview(full, week_type, group["semester_start"], today)
+        await _send(message, text, week_type, teacher_name = teacher)
+    else:
+        gname = group["group_name"]
+        full = get_full_schedule(gname, week_type)
+        text = format_week_overview(full, week_type, group["semester_start"], today)
+        await _send(message, text, week_type, group_name = gname)
 
 
 @router.message(Command("chatid"))
@@ -148,16 +182,19 @@ async def cmd_settopic(message: Message) -> None:
 @router.message(Command("help"))
 async def cmd_help(message: Message) -> None:
     group = _get_group(message.chat.id)
-    group_name = group["group_name"] if group else "не привязана"
+    if group:
+        bound = group.get("teacher_name") or group.get("group_name", "")
+    else:
+        bound = "не привязано"
 
     text = (
-        f"📚 <b>Бот расписания</b> (группа: {group_name})\n\n"
+        f"📚 <b>Бот расписания</b> ({bound})\n\n"
         "/today — расписание на сегодня\n"
         "/tomorrow — расписание на завтра\n"
         "/week — обзор на неделю\n"
         "/edit — редактировать расписание\n"
-        "/register — привязать группу к чату\n"
-        "/unregister — отвязать группу\n"
+        "/register — привязать группу/преподавателя\n"
+        "/unregister — отвязать\n"
         "/settopic — рассылка в эту тему\n"
         "/help — эта справка"
     )

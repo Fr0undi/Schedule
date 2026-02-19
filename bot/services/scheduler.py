@@ -13,11 +13,14 @@ from bot.config import settings
 
 from bot.logger import get_logger
 
-from bot.services.storage import get_day_schedule, load_groups
+from bot.services.storage import get_day_schedule, get_teacher_day_schedule, load_groups
 from bot.services.week_utils import get_week_type
-from bot.services.formatter import format_day_schedule
+from bot.services.formatter import format_day_schedule, format_teacher_day_schedule
 
-from bot.keyboards.inline import webapp_keyboard, url_keyboard
+from bot.keyboards.inline import (
+    webapp_keyboard, url_keyboard,
+    teacher_webapp_keyboard, teacher_url_keyboard,
+)
 
 
 logger = get_logger(__name__)
@@ -25,7 +28,9 @@ logger = get_logger(__name__)
 
 async def _send_to_chat(
     bot: Bot, chat_id: int, text: str,
-    week_type: str, group_name: str,
+    week_type: str,
+    group_name: str | None = None,
+    teacher_name: str | None = None,
     topic_id: int | None = None,
 ) -> None:
     """Отправить сообщение в чат с фоллбэком кнопки"""
@@ -35,20 +40,18 @@ async def _send_to_chat(
         kwargs["message_thread_id"] = topic_id
 
     if settings.WEBAPP_BASE_URL.startswith("https://"):
+        if teacher_name:
+            kb = teacher_webapp_keyboard(settings.WEBAPP_BASE_URL, week_type, teacher_name)
+            fallback_kb = teacher_url_keyboard(settings.WEBAPP_BASE_URL, week_type, teacher_name)
+        else:
+            kb = webapp_keyboard(settings.WEBAPP_BASE_URL, week_type, group_name)
+            fallback_kb = url_keyboard(settings.WEBAPP_BASE_URL, week_type, group_name)
         try:
-            await bot.send_message(
-                chat_id, text,
-                reply_markup = webapp_keyboard(settings.WEBAPP_BASE_URL, week_type, group_name),
-                **kwargs,
-            )
+            await bot.send_message(chat_id, text, reply_markup = kb, **kwargs)
             return
         except TelegramBadRequest:
             logger.warning("WebApp-кнопка не прошла для чата %d, отправляю URL-кнопку", chat_id)
-            await bot.send_message(
-                chat_id, text,
-                reply_markup = url_keyboard(settings.WEBAPP_BASE_URL, week_type, group_name),
-                **kwargs,
-            )
+            await bot.send_message(chat_id, text, reply_markup = fallback_kb, **kwargs)
             return
     await bot.send_message(chat_id, text, **kwargs)
 
@@ -66,9 +69,11 @@ async def send_daily_schedule(bot: Bot) -> None:
     logger.info("Рассылка: завтра %s, weekday=%d, групп=%d", tomorrow, weekday, len(groups))
 
     for chat_id, group_config in groups.items():
-        group_name = group_config["group_name"]
+        group_name = group_config.get("group_name")
+        teacher_name = group_config.get("teacher_name")
         semester_start = group_config["semester_start"]
         topic_id = group_config.get("topic_id")
+        bound_name = teacher_name or group_name or "?"
 
         kwargs = {}
         if topic_id:
@@ -80,18 +85,30 @@ async def send_daily_schedule(bot: Bot) -> None:
                 continue
 
             week_type = get_week_type(tomorrow, semester_start)
-            lessons = get_day_schedule(group_name, weekday, week_type)
+
+            if teacher_name:
+                lessons = get_teacher_day_schedule(teacher_name, weekday, week_type)
+            else:
+                lessons = get_day_schedule(group_name, weekday, week_type)
 
             if weekday == 6 and not lessons:
                 await bot.send_message(chat_id, "🎉 Завтра суббота без пар! Отдыхайте", **kwargs)
                 continue
 
-            text = format_day_schedule(lessons, tomorrow, semester_start)
-            await _send_to_chat(bot, chat_id, text, week_type, group_name, topic_id)
-            logger.info("Расписание отправлено в чат %d [%s]", chat_id, group_name)
+            if teacher_name:
+                text = format_teacher_day_schedule(lessons, tomorrow, semester_start)
+            else:
+                text = format_day_schedule(lessons, tomorrow, semester_start)
+
+            await _send_to_chat(
+                bot, chat_id, text, week_type,
+                group_name = group_name, teacher_name = teacher_name,
+                topic_id = topic_id,
+            )
+            logger.info("Расписание отправлено в чат %d [%s]", chat_id, bound_name)
 
         except Exception:
-            logger.exception("Ошибка при отправке в чат %d [%s]", chat_id, group_name)
+            logger.exception("Ошибка при отправке в чат %d [%s]", chat_id, bound_name)
 
 
 def setup_scheduler(bot: Bot) -> AsyncIOScheduler:

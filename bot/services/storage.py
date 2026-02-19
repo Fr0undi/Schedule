@@ -192,6 +192,21 @@ def save_group(chat_id: int, group_name: str, semester_start: str, registered_by
     logger.info("Группа [%s] привязана к чату %d", group_name, chat_id)
 
 
+def save_teacher_binding(chat_id: int, teacher_name: str, semester_start: str, registered_by: int) -> None:
+    """Зарегистрировать преподавателя для чата (вместо группы)"""
+
+    groups = _load_groups_raw()
+    old = groups.get(str(chat_id), {})
+    groups[str(chat_id)] = {
+        "teacher_name": teacher_name,
+        "semester_start": semester_start,
+        "registered_by": registered_by,
+        "topic_id": old.get("topic_id"),
+    }
+    _save_groups_raw(groups)
+    logger.info("Преподаватель [%s] привязан к чату %d", teacher_name, chat_id)
+
+
 def save_topic(chat_id: int, topic_id: int | None) -> bool:
     """Привязать тему (topic) для ежедневной рассылки. None — сбросить."""
 
@@ -430,6 +445,19 @@ def _merge_teacher_lessons(lessons: list[dict]) -> list[dict]:
         else:
             merged[key] = {**l}
     return list(merged.values())
+
+
+def get_teacher_day_schedule(teacher_name: str, weekday: int, week_type: str) -> list[dict]:
+    """Получить пары преподавателя на конкретный день"""
+
+    index = _build_teacher_index()
+    lessons = index.get(teacher_name, [])
+    filtered = [
+        l for l in lessons
+        if l["weekday"] == weekday and l["week_type"] in ("both", week_type)
+    ]
+    merged = _merge_teacher_lessons(filtered)
+    return sorted(merged, key = lambda l: l["lesson_number"])
 
 
 def get_teacher_full_schedule(teacher_name: str, week_type: str) -> dict[int, list[dict]]:
