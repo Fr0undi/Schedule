@@ -350,10 +350,23 @@ _teacher_cache: dict[str, list[dict]] | None = None
 
 
 def _normalize_teacher(name: str) -> str:
-    """Нормализация ФИО: убрать пробелы, гарантировать точку в конце"""
+    """Нормализация ФИО: убрать пробелы, привести регистр, гарантировать точку в конце.
+
+    'КУКАРЦЕВ В.В.' и 'кукарцев в.в.' → 'Кукарцев В.В.'
+    """
 
     name = name.strip().rstrip(".")
-    return name + "."
+    # "КУКАРЦЕВ В.В" → ["КУКАРЦЕВ", "В.В"]
+    parts = name.split()
+    normalized = []
+    for p in parts:
+        # Инициалы ("В.В", "А.") — каждую букву заглавной
+        if "." in p or (len(p) <= 4 and p.replace(".", "").isalpha()):
+            normalized.append(p.upper())
+        else:
+            # Фамилия — первая заглавная, остальные строчные
+            normalized.append(p.capitalize())
+    return " ".join(normalized) + "."
 
 
 def _build_teacher_index() -> dict[str, list[dict]]:

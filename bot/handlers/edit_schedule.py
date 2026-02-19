@@ -8,7 +8,7 @@ from aiogram.fsm.state import StatesGroup, State
 
 from bot.config import settings
 from bot.logger import get_logger
-from bot.services.storage import load_schedule, save_schedule, get_group_by_chat
+from bot.services.storage import load_schedule, save_schedule, get_group_by_chat, _normalize_teacher
 from bot.services.formatter import LESSON_TIMES
 from bot.keyboards.edit_kb import (
     edit_main_menu_kb,
@@ -383,7 +383,7 @@ async def fsm_add_teacher(message: Message, state: FSMContext) -> None:
     """FSM: ввод преподавателя → запрос аудитории"""
 
     teacher = message.text.strip()
-    await state.update_data(add_teacher = None if teacher == "-" else teacher)
+    await state.update_data(add_teacher = None if teacher == "-" else _normalize_teacher(teacher))
     await state.set_state(EditSchedule.add_room)
 
     if message.chat.type != "private":
@@ -582,6 +582,8 @@ async def fsm_edit_value(message: Message, state: FSMContext) -> None:
         value = None
 
     field_key = {"sub": "subject", "tch": "teacher", "rm": "room"}[field]
+    if value and field_key == "teacher":
+        value = _normalize_teacher(value)
     old_value = lessons[idx][field_key]
     lessons[idx][field_key] = value
     save_schedule(group_name, lessons)
