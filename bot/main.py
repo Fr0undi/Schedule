@@ -15,6 +15,8 @@ from bot.logger import setup_logging, get_logger
 
 from bot.handlers import commands, upload, register, edit_schedule
 
+from bot.middleware import CommandLogMiddleware
+
 from bot.services.scheduler import setup_scheduler
 
 from webapp.app import app as webapp_app
@@ -30,6 +32,8 @@ async def main() -> None:
         default = DefaultBotProperties(parse_mode = ParseMode.HTML),
     )
     dp = Dispatcher()
+
+    dp.message.middleware(CommandLogMiddleware())
 
     dp.include_router(commands.router)
     dp.include_router(upload.router)
