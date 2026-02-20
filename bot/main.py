@@ -13,7 +13,7 @@ from bot.config import settings
 
 from bot.logger import setup_logging, get_logger
 
-from bot.handlers import commands, upload, register, edit_schedule
+from bot.handlers import commands, upload, register, edit_schedule, inline
 
 from bot.middleware import CommandLogMiddleware
 
@@ -39,6 +39,7 @@ async def main() -> None:
     dp.include_router(upload.router)
     dp.include_router(register.router)
     dp.include_router(edit_schedule.router)
+    dp.include_router(inline.router)
 
     scheduler = setup_scheduler(bot)
     scheduler.start()
@@ -73,7 +74,7 @@ async def main() -> None:
     logger.info("Бот запущен")
 
     try:
-        await dp.start_polling(bot)
+        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     finally:
         scheduler.shutdown()
         await bot.session.close()
