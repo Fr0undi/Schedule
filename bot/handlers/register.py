@@ -747,7 +747,7 @@ async def cmd_unregister(message: Message) -> None:
         await message.answer("⛔ Только администратор чата может снять привязанное расписание")
         return
 
-    if remove_group(message.chat.id):
+    if remove_group(message.chat.id, removed_by = message.from_user.id):
         await _reset_menu_button(message.bot, message.chat.id)
         await message.answer("✅ Расписание отвязано")
     else:

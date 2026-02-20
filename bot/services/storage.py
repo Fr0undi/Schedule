@@ -4,7 +4,9 @@ import json
 import re
 
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+_MSK = timezone(timedelta(hours = 3))
 
 from bot.config import settings
 
@@ -17,6 +19,7 @@ DATA_DIR = Path(settings.DATA_DIR)
 SCHEDULES_DIR = DATA_DIR / "schedules"
 GROUPS_PATH = DATA_DIR / "groups.json"
 UNIVERSITY_PATH = DATA_DIR / "university.json"
+BINDINGS_LOG_PATH = DATA_DIR / "bindings_log.json"
 
 
 def _slugify(group_name: str) -> str:
@@ -87,7 +90,7 @@ def save_schedule(
             course = existing.get("course")
 
     data = {
-        "updated_at": datetime.now().isoformat(),
+        "updated_at": datetime.now(_MSK).isoformat(),
         "group_name": group_name,
         "form": form,
         "institute": institute,
@@ -177,6 +180,29 @@ def _save_groups_raw(groups: dict) -> None:
     GROUPS_PATH.write_text(json.dumps(groups, ensure_ascii = False, indent = 2), encoding = "utf-8")
 
 
+def _log_binding(action: str, chat_id: int, user_id: int, **kwargs) -> None:
+    """Записать событие привязки/отвязки в журнал"""
+
+    entry = {
+        "action": action,
+        "chat_id": chat_id,
+        "user_id": user_id,
+        "timestamp": datetime.now(_MSK).isoformat(),
+        **kwargs,
+    }
+
+    log: list[dict] = []
+    if BINDINGS_LOG_PATH.exists():
+        try:
+            log = json.loads(BINDINGS_LOG_PATH.read_text(encoding = "utf-8"))
+        except Exception:
+            pass
+
+    log.append(entry)
+    DATA_DIR.mkdir(parents = True, exist_ok = True)
+    BINDINGS_LOG_PATH.write_text(json.dumps(log, ensure_ascii = False, indent = 2), encoding = "utf-8")
+
+
 def save_group(chat_id: int, group_name: str, semester_start: str, registered_by: int) -> None:
     """Зарегистрировать группу для чата"""
 
@@ -186,9 +212,11 @@ def save_group(chat_id: int, group_name: str, semester_start: str, registered_by
         "group_name": group_name,
         "semester_start": semester_start,
         "registered_by": registered_by,
+        "registered_at": datetime.now(_MSK).isoformat(),
         "topic_id": old.get("topic_id"),
     }
     _save_groups_raw(groups)
+    _log_binding("bind", chat_id, registered_by, group_name = group_name)
     logger.info("Группа [%s] привязана к чату %d", group_name, chat_id)
 
 
@@ -201,9 +229,11 @@ def save_teacher_binding(chat_id: int, teacher_name: str, semester_start: str, r
         "teacher_name": teacher_name,
         "semester_start": semester_start,
         "registered_by": registered_by,
+        "registered_at": datetime.now(_MSK).isoformat(),
         "topic_id": old.get("topic_id"),
     }
     _save_groups_raw(groups)
+    _log_binding("bind", chat_id, registered_by, teacher_name = teacher_name)
     logger.info("Преподаватель [%s] привязан к чату %d", teacher_name, chat_id)
 
 
@@ -219,13 +249,24 @@ def save_topic(chat_id: int, topic_id: int | None) -> bool:
     return True
 
 
-def remove_group(chat_id: int) -> bool:
-    """Отвязать группу от чата, возвращает True если была привязка"""
+def remove_group(chat_id: int, removed_by: int = 0) -> bool:
+    """Отвязать расписание от чата, возвращает True если была привязка"""
 
     groups = _load_groups_raw()
-    if str(chat_id) in groups:
-        del groups[str(chat_id)]
+    key = str(chat_id)
+    if key in groups:
+        old = groups[key]
+        name = old.get("teacher_name") or old.get("group_name", "?")
+        log_kwargs = {}
+        if old.get("teacher_name"):
+            log_kwargs["teacher_name"] = old["teacher_name"]
+        else:
+            log_kwargs["group_name"] = old.get("group_name", "?")
+
+        del groups[key]
         _save_groups_raw(groups)
+        _log_binding("unbind", chat_id, removed_by, **log_kwargs)
+        logger.info("Расписание [%s] отвязано от чата %d", name, chat_id)
         return True
     return False
 
