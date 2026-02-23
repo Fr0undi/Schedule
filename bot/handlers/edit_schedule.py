@@ -120,6 +120,7 @@ def _verify_lesson(lessons: list[dict], idx: int, expected: dict) -> bool:
 
 # --- Entry point ---
 
+@router.message(F.chat.type == "private", F.text == "✏️ Редакт.")
 @router.message(Command("edit"))
 async def cmd_edit(message: Message, state: FSMContext) -> None:
     """Команда /edit — главное меню редактирования"""

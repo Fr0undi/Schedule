@@ -2,7 +2,7 @@
 
 from datetime import date, timedelta
 
-from aiogram import Router
+from aiogram import F, Router
 
 from aiogram.filters import Command
 from aiogram.types import Message
@@ -23,6 +23,7 @@ from bot.keyboards.inline import (
     webapp_keyboard, url_keyboard,
     teacher_webapp_keyboard, teacher_url_keyboard,
 )
+from bot.keyboards.reply_kb import main_keyboard
 
 
 logger = get_logger(__name__)
@@ -65,6 +66,7 @@ async def _send(
 @router.message(Command("start"))
 async def cmd_start(message: Message) -> None:
     group = _get_group(message.chat.id)
+    kb = main_keyboard() if message.chat.type == "private" else None
 
     if group:
         bound = group.get("teacher_name") or group.get("group_name", "")
@@ -78,15 +80,18 @@ async def cmd_start(message: Message) -> None:
             "✏️ /edit — редактировать расписание\n"
             "📋 /register — сменить привязку\n"
             "📖 /help — все команды",
+            reply_markup = kb,
         )
     else:
         await message.answer(
             "👋 Привет! Я бот расписания РГАУ-МСХА\n\n"
             "Чтобы начать, привяжите группу или преподавателя:\n"
             "/register — выбрать",
+            reply_markup = kb,
         )
 
 
+@router.message(F.chat.type == "private", F.text == "📅 Сегодня")
 @router.message(Command("today"))
 async def cmd_today(message: Message) -> None:
     group = _get_group(message.chat.id)
@@ -109,6 +114,7 @@ async def cmd_today(message: Message) -> None:
         await _send(message, text, week_type, group_name = gname)
 
 
+@router.message(F.chat.type == "private", F.text == "📅 Завтра")
 @router.message(Command("tomorrow"))
 async def cmd_tomorrow(message: Message) -> None:
     group = _get_group(message.chat.id)
@@ -131,6 +137,7 @@ async def cmd_tomorrow(message: Message) -> None:
         await _send(message, text, week_type, group_name = gname)
 
 
+@router.message(F.chat.type == "private", F.text == "📆 Неделя")
 @router.message(Command("week"))
 async def cmd_week(message: Message) -> None:
     group = _get_group(message.chat.id)
@@ -179,6 +186,7 @@ async def cmd_settopic(message: Message) -> None:
         await message.answer(NOT_REGISTERED)
 
 
+@router.message(F.chat.type == "private", F.text == "❓ Помощь")
 @router.message(Command("help"))
 async def cmd_help(message: Message) -> None:
     group = _get_group(message.chat.id)
@@ -198,4 +206,5 @@ async def cmd_help(message: Message) -> None:
         "/settopic — рассылка в эту тему\n"
         "/help — эта справка"
     )
-    await message.answer(text)
+    kb = main_keyboard() if message.chat.type == "private" else None
+    await message.answer(text, reply_markup = kb)

@@ -128,6 +128,7 @@ async def _reset_menu_button(bot, chat_id: int) -> None:
         logger.warning("Не удалось сбросить menu button для чата %d", chat_id)
 
 
+@router.message(F.chat.type == "private", F.text == "📋 Привязка")
 @router.message(Command("register"))
 async def cmd_register(message: Message, state: FSMContext) -> None:
     if not await _is_chat_admin(message):
