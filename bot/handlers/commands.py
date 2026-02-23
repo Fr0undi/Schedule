@@ -23,7 +23,7 @@ from bot.keyboards.inline import (
     webapp_keyboard, url_keyboard,
     teacher_webapp_keyboard, teacher_url_keyboard,
 )
-from bot.keyboards.reply_kb import main_keyboard
+from bot.keyboards.reply_kb import main_keyboard, group_keyboard
 
 
 logger = get_logger(__name__)
@@ -66,7 +66,7 @@ async def _send(
 @router.message(Command("start"))
 async def cmd_start(message: Message) -> None:
     group = _get_group(message.chat.id)
-    kb = main_keyboard() if message.chat.type == "private" else None
+    kb = main_keyboard() if message.chat.type == "private" else group_keyboard()
 
     if group:
         bound = group.get("teacher_name") or group.get("group_name", "")
@@ -206,5 +206,5 @@ async def cmd_help(message: Message) -> None:
         "/settopic — рассылка в эту тему\n"
         "/help — эта справка"
     )
-    kb = main_keyboard() if message.chat.type == "private" else None
+    kb = main_keyboard() if message.chat.type == "private" else group_keyboard()
     await message.answer(text, reply_markup = kb)
