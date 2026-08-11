@@ -68,7 +68,7 @@ async def _is_chat_admin(message: Message) -> bool:
     """Проверить, является ли отправитель админом чата"""
 
     if message.chat.type == "private":
-        return message.from_user.id in settings.ADMIN_IDS
+        return True
 
     member = await message.bot.get_chat_member(message.chat.id, message.from_user.id)
     return member.status in ("creator", "administrator")

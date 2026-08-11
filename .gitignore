@@ -5,3 +5,8 @@ data/
 certbot/
 .claude/
 .idea/
+CLAUDE.md
+deploy.ps1
+docker-compose.local.yml
+import_schedules.py
+.DS_Store

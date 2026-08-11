@@ -41,8 +41,7 @@ async def schedule_page(
 ):
     if not group:
         institutes = list_groups_structured()
-        return templates.TemplateResponse("select_group.html", {
-            "request": request,
+        return templates.TemplateResponse(request, "select_group.html", {
             "institutes": institutes,
         })
 
@@ -59,8 +58,7 @@ async def schedule_page(
     if weekday == 7 or (weekday == 6 and 6 not in active_schedule):
         weekday = 1
 
-    return templates.TemplateResponse("schedule.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "schedule.html", {
         "group_name": group,
         "week_type": week_type,
         "week_num": week_num,
@@ -82,8 +80,7 @@ async def teachers_page(
 ):
     if not name:
         teachers = list_available_teachers()
-        return templates.TemplateResponse("select_teacher.html", {
-            "request": request,
+        return templates.TemplateResponse(request, "select_teacher.html", {
             "teachers": teachers,
         })
 
@@ -100,8 +97,7 @@ async def teachers_page(
     if weekday == 7 or (weekday == 6 and 6 not in active_schedule):
         weekday = 1
 
-    return templates.TemplateResponse("teacher_schedule.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "teacher_schedule.html", {
         "teacher_name": name,
         "week_type": week_type,
         "week_num": week_num,
